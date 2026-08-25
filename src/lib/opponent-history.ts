@@ -28,6 +28,11 @@ export type VsOpponentMeeting = InvolvementStats & {
   assists: number;
   minutes: number;
   wasHome: boolean;
+  kickoffTime: string | null;
+  /** Player's team score first. */
+  teamScore: number | null;
+  opponentScore: number | null;
+  result: "W" | "D" | "L" | null;
 };
 
 export type PastSeasonSlice = InvolvementStats & {
@@ -135,6 +140,9 @@ export function buildVsUpcomingClubs(
       | "assists"
       | "minutes"
       | "was_home"
+      | "kickoff_time"
+      | "team_h_score"
+      | "team_a_score"
       | "threat"
       | "creativity"
       | "defensive_contribution"
@@ -160,15 +168,29 @@ export function buildVsUpcomingClubs(
     const meetings = history
       .filter((h) => h.opponent_team === u.opponentId)
       .sort((a, b) => b.round - a.round)
-      .map((h) => ({
-        round: h.round,
-        points: h.total_points,
-        goals: h.goals_scored,
-        assists: h.assists,
-        minutes: h.minutes,
-        wasHome: h.was_home,
-        ...involvementFromHistory(h),
-      }));
+      .map((h) => {
+        const teamScore = h.was_home ? h.team_h_score : h.team_a_score;
+        const opponentScore = h.was_home ? h.team_a_score : h.team_h_score;
+        let result: VsOpponentMeeting["result"] = null;
+        if (teamScore !== null && opponentScore !== null) {
+          if (teamScore > opponentScore) result = "W";
+          else if (teamScore < opponentScore) result = "L";
+          else result = "D";
+        }
+        return {
+          round: h.round,
+          points: h.total_points,
+          goals: h.goals_scored,
+          assists: h.assists,
+          minutes: h.minutes,
+          wasHome: h.was_home,
+          kickoffTime: h.kickoff_time ?? null,
+          teamScore,
+          opponentScore,
+          result,
+          ...involvementFromHistory(h),
+        };
+      });
 
     const totalPoints = meetings.reduce((s, m) => s + m.points, 0);
     const totalGoals = meetings.reduce((s, m) => s + m.goals, 0);
