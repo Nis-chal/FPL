@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
+import { BestFormationCard } from "@/components/BestFormationCard";
 import { PitchView } from "@/components/PitchView";
 import { TeamIdForm } from "@/components/TeamIdForm";
 import { Reasons } from "@/components/PlayerTable";
@@ -17,7 +18,7 @@ import {
 } from "@/lib/pitch";
 import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
-import { buildBestSquad } from "@/lib/squad";
+import { buildBestSquad, rankFormations } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
 import type { ScoredPlayer, TeamRating } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
@@ -54,9 +55,12 @@ export function SquadClient({
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
   const {
     rankBy,
-    setRankBy,
+    toggleRank,
+    resetFilters,
     horizon,
     setHorizon,
+    budget,
+    setBudget,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -82,7 +86,10 @@ export function SquadClient({
   }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
 
   const built = useMemo(() => {
-    const squad = buildBestSquad(scored);
+    const squad = buildBestSquad(scored, budget);
+    if (!squad.captain || squad.startingXi.length === 0) {
+      return squad;
+    }
     const captain = pickCaptain(squad.startingXi, rankBy) ?? squad.captain;
     const vice =
       pickCaptain(
@@ -94,10 +101,16 @@ export function SquadClient({
       captain,
       viceCaptain: vice,
     };
-  }, [scored, rankBy]);
+  }, [scored, rankBy, budget]);
 
-  // Reset model lineup when horizon / recommendations change
+  const formations = useMemo(() => rankFormations(scored), [scored]);
+
+  // Reset model lineup when horizon / recommendations / budget change
   useEffect(() => {
+    if (!built.captain || built.startingXi.length === 0) {
+      setModelLineup(null);
+      return;
+    }
     setModelLineup({
       startingXi: built.startingXi,
       bench: built.bench,
@@ -105,8 +118,10 @@ export function SquadClient({
       viceId: built.viceCaptain.id,
     });
     setModelSelected(null);
-    setSwapHint(null);
-  }, [built]);
+    setSwapHint(
+      `Rebuilt for ${formatPrice(budget)} budget · ${formatPrice(built.bank)} bank`,
+    );
+  }, [built, budget]);
 
   // Keep player stats in sync with horizon when IDs unchanged
   useEffect(() => {
@@ -263,9 +278,12 @@ export function SquadClient({
           includeAccumulated={includeAccumulated}
           onAccumulatedChange={setIncludeAccumulated}
           rankBy={rankBy}
-          onRankByChange={setRankBy}
+          onToggleRank={toggleRank}
+          onReset={resetFilters}
           priceBounds={priceBounds}
           onPriceBoundsChange={setPriceBounds}
+          budget={budget}
+          onBudgetChange={setBudget}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -278,12 +296,18 @@ export function SquadClient({
         <TeamRatingCard rating={modelRating} />
       )}
 
+      <BestFormationCard formations={formations} horizon={horizon} />
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="Formation"
-          value={formationFromXi(activeModel.startingXi)}
+          label="Best formation"
+          value={formations[0]?.name ?? formationFromXi(activeModel.startingXi)}
+          accent
         />
-        <Stat label="Squad cost" value={formatPrice(built.totalCost)} />
+        <Stat
+          label={`Squad / ${formatPrice(budget)}`}
+          value={`${formatPrice(built.totalCost)} · ${formatPrice(built.bank)} bank`}
+        />
         <Stat
           label={`XI pts (next ${horizon})`}
           value={modelTotal.toFixed(1)}

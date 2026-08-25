@@ -26,7 +26,7 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     minStartChance: 0.4,
   });
   const captainPick =
-    pickCaptain(scored, "xpts") ?? topScorers[0] ?? bestSquad.captain;
+    pickCaptain(scored, ["overall"]) ?? topScorers[0] ?? bestSquad.captain;
   const transferTargets = bestInboundTargets(scored, 20);
   const currentEvent = getCurrentEvent(bootstrap.events) ?? null;
   const nextEvent = getNextEvent(bootstrap.events) ?? null;

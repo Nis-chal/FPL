@@ -1,7 +1,17 @@
-import type { BestSquad, Position, ScoredPlayer } from "@/lib/types";
+import type {
+  BestSquad,
+  FormationRank,
+  Position,
+  ScoredPlayer,
+} from "@/lib/types";
 import { BUDGET, SQUAD_LIMITS } from "@/lib/utils";
 
-const FORMATIONS: Array<{ name: string; DEF: number; MID: number; FWD: number }> = [
+export const FORMATIONS: Array<{
+  name: string;
+  DEF: number;
+  MID: number;
+  FWD: number;
+}> = [
   { name: "3-4-3", DEF: 3, MID: 4, FWD: 3 },
   { name: "3-5-2", DEF: 3, MID: 5, FWD: 2 },
   { name: "4-4-2", DEF: 4, MID: 4, FWD: 2 },
@@ -9,6 +19,86 @@ const FORMATIONS: Array<{ name: string; DEF: number; MID: number; FWD: number }>
   { name: "5-4-1", DEF: 5, MID: 4, FWD: 1 },
   { name: "5-3-2", DEF: 5, MID: 3, FWD: 2 },
 ];
+
+/**
+ * Rank legal FPL formations by projected XI points from a player pool
+ * (max 3 per club). Used for “best formation” insights.
+ */
+export function rankFormations(players: ScoredPlayer[]): FormationRank[] {
+  const pool = players
+    .filter((p) => p.availabilityFactor >= 0.35)
+    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4);
+
+  const byPos = (pos: Position) =>
+    [...pool.filter((p) => p.position === pos)].sort(
+      (a, b) => b.projectedPoints - a.projectedPoints,
+    );
+
+  const results: FormationRank[] = [];
+
+  for (const formation of FORMATIONS) {
+    const gk = byPos("GKP");
+    const def = byPos("DEF");
+    const mid = byPos("MID");
+    const fwd = byPos("FWD");
+    if (
+      gk.length < 1 ||
+      def.length < formation.DEF ||
+      mid.length < formation.MID ||
+      fwd.length < formation.FWD
+    ) {
+      continue;
+    }
+
+    const startingXi: ScoredPlayer[] = [];
+    const clubCount = new Map<number, number>();
+
+    const tryAdd = (candidates: ScoredPlayer[], need: number): boolean => {
+      let added = 0;
+      for (const p of candidates) {
+        if (added >= need) break;
+        if (startingXi.some((x) => x.id === p.id)) continue;
+        const clubs = clubCount.get(p.teamId) ?? 0;
+        if (clubs >= 3) continue;
+        startingXi.push(p);
+        clubCount.set(p.teamId, clubs + 1);
+        added += 1;
+      }
+      return added >= need;
+    };
+
+    if (
+      !tryAdd(gk, 1) ||
+      !tryAdd(def, formation.DEF) ||
+      !tryAdd(mid, formation.MID) ||
+      !tryAdd(fwd, formation.FWD)
+    ) {
+      continue;
+    }
+
+    const projectedPoints = Number(
+      startingXi.reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
+    );
+    const expectedPointsPerGw = Number(
+      (
+        startingXi.reduce((s, p) => s + p.expectedPointsPerGw, 0) /
+        Math.max(1, startingXi.length)
+      ).toFixed(2),
+    );
+
+    results.push({
+      name: formation.name,
+      DEF: formation.DEF,
+      MID: formation.MID,
+      FWD: formation.FWD,
+      projectedPoints,
+      expectedPointsPerGw,
+      startingXi,
+    });
+  }
+
+  return results.sort((a, b) => b.projectedPoints - a.projectedPoints);
+}
 
 function canAdd(
   player: ScoredPlayer,
@@ -138,14 +228,19 @@ function pickBestXi(squad: ScoredPlayer[]): {
 /**
  * Greedy squad builder: fill each position with best projected players under budget/club caps.
  * Then refine by trying to swap in higher-value alternatives within residual budget.
+ * @param budgetTenths Squad budget in tenths of £m (default 1000 = £100.0m). Capped at BUDGET.
  */
-export function buildBestSquad(scored: ScoredPlayer[]): BestSquad {
+export function buildBestSquad(
+  scored: ScoredPlayer[],
+  budgetTenths: number = BUDGET,
+): BestSquad {
+  const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
   const candidates = scored
     .filter((p) => p.minutes > 0 || p.form > 0)
     .filter((p) => p.availabilityFactor >= 0.35);
 
   const squad: ScoredPlayer[] = [];
-  let remaining = BUDGET;
+  let remaining = budget;
 
   const positions: Position[] = ["GKP", "DEF", "MID", "FWD"];
   for (const pos of positions) {
@@ -207,19 +302,40 @@ export function buildBestSquad(scored: ScoredPlayer[]): BestSquad {
   const orderedXi = [...startingXi].sort(
     (a, b) => b.projectedPoints - a.projectedPoints,
   );
-  const captain = orderedXi[0];
-  const viceCaptain = orderedXi[1] ?? orderedXi[0];
+  const captain = orderedXi[0] ?? squad[0];
+  const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
+
+  if (!captain) {
+    const fallback = candidates[0] ?? scored[0];
+    if (!fallback) {
+      throw new Error("No players available to build a squad");
+    }
+    return {
+      squad,
+      startingXi: [],
+      bench: squad,
+      captain: fallback,
+      viceCaptain: fallback,
+      formation: "—",
+      totalCost: budget - remaining,
+      projectedPoints: 0,
+      bank: remaining,
+    };
+  }
 
   return {
-    squad: [...squad].sort((a, b) => a.positionId - b.positionId || b.projectedPoints - a.projectedPoints),
+    squad: [...squad].sort(
+      (a, b) =>
+        a.positionId - b.positionId || b.projectedPoints - a.projectedPoints,
+    ),
     startingXi,
     bench,
     captain,
     viceCaptain,
     formation,
-    totalCost: BUDGET - remaining,
+    totalCost: budget - remaining,
     projectedPoints: Number(
-      (projectedPoints + captain.projectedPoints).toFixed(2), // captain doubles
+      (projectedPoints + captain.projectedPoints).toFixed(2),
     ),
     bank: remaining,
   };

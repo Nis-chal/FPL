@@ -22,7 +22,28 @@ export const SQUAD_LIMITS: Record<Position, number> = {
   FWD: 3,
 };
 
-export const BUDGET = 1000; // tenths of a million (100.0m)
+export const BUDGET = 1000; // tenths of a million (100.0m) — FPL hard max
+export const BUDGET_MIN = 800; // £80.0m practical floor for a full 15
+
+export const BUDGET_PRESETS = [800, 850, 900, 950, 1000] as const;
+
+/** Clamp squad budget to £80–£100m (tenths). */
+export function clampBudget(tenths: number): number {
+  if (!Number.isFinite(tenths)) return BUDGET;
+  return Math.min(BUDGET, Math.max(BUDGET_MIN, Math.round(tenths)));
+}
+
+export function parseBudget(
+  value: string | null | undefined,
+  fallback = BUDGET,
+): number {
+  if (value === null || value === undefined || value === "") return fallback;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  // Accept £m (e.g. 100) or tenths (e.g. 1000)
+  const tenths = n <= 150 ? Math.round(n * 10) : Math.round(n);
+  return clampBudget(tenths);
+}
 
 export function priceToMillions(nowCost: number): number {
   return nowCost / 10;

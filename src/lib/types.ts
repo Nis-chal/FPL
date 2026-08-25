@@ -226,6 +226,7 @@ export interface EventLive {
 
 /** Analyze-by ranking modes for filters. */
 export type RankBy =
+  | "overall"
   | "xpts"
   | "price"
   | "best_start"
@@ -233,6 +234,16 @@ export type RankBy =
   | "win_cs"
   | "next_game"
   | "next_5";
+
+export interface FormationRank {
+  name: string;
+  DEF: number;
+  MID: number;
+  FWD: number;
+  projectedPoints: number;
+  expectedPointsPerGw: number;
+  startingXi: ScoredPlayer[];
+}
 
 export interface PriceBounds {
   minPrice: number | null;

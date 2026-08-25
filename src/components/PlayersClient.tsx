@@ -5,7 +5,7 @@ import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { PlayerTable } from "@/components/PlayerTable";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
-import { filterByPrice, sortByRank } from "@/lib/ranking";
+import { filterByPrice, rankByLabel, sortByRank } from "@/lib/ranking";
 import { applyHorizon, topProjected } from "@/lib/scoring";
 import type { Position, ScoredPlayer } from "@/lib/types";
 import { useState } from "react";
@@ -23,9 +23,12 @@ export function PlayersClient({
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
   const {
     rankBy,
-    setRankBy,
+    toggleRank,
+    resetFilters,
     horizon,
     setHorizon,
+    budget,
+    setBudget,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -60,9 +63,12 @@ export function PlayersClient({
         includeAccumulated={includeAccumulated}
         onAccumulatedChange={setIncludeAccumulated}
         rankBy={rankBy}
-        onRankByChange={setRankBy}
+        onToggleRank={toggleRank}
+        onReset={resetFilters}
         priceBounds={priceBounds}
         onPriceBoundsChange={setPriceBounds}
+        budget={budget}
+        onBudgetChange={setBudget}
       />
       <div className="flex flex-wrap gap-2">
         <input
@@ -101,7 +107,7 @@ export function PlayersClient({
         </select>
       </div>
       <p className="text-xs text-zinc-500">
-        {filtered.length} players · analyze by {rankBy}
+        {filtered.length} players · {rankByLabel(rankBy)}
         {includeAccumulated ? " · form on" : " · form off"}
       </p>
       <PlayerTable players={preview} showThreat />

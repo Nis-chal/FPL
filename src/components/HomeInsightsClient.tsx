@@ -3,15 +3,21 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
+import { BestFormationCard } from "@/components/BestFormationCard";
 import { LiveGwStrip } from "@/components/LiveGwStrip";
 import { PlayerTable, Reasons } from "@/components/PlayerTable";
 import { TeamIdForm } from "@/components/TeamIdForm";
 import { Card, Stat } from "@/components/ui";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
-import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
+import {
+  filterByPrice,
+  pickCaptain,
+  rankByLabel,
+  sortByRank,
+} from "@/lib/ranking";
 import { applyHorizon, topProjected } from "@/lib/scoring";
-import { buildBestSquad } from "@/lib/squad";
+import { buildBestSquad, rankFormations } from "@/lib/squad";
 import type { FplEvent, ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
@@ -27,9 +33,12 @@ export function HomeInsightsClient({
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
   const {
     rankBy,
-    setRankBy,
+    toggleRank,
+    resetFilters,
     horizon,
     setHorizon,
+    budget,
+    setBudget,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -40,7 +49,11 @@ export function HomeInsightsClient({
     return sortByRank(priced, rankBy);
   }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
 
-  const bestSquad = useMemo(() => buildBestSquad(scored), [scored]);
+  const bestSquad = useMemo(
+    () => buildBestSquad(scored, budget),
+    [scored, budget],
+  );
+  const formations = useMemo(() => rankFormations(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
     minMinutes: 0,
     availableOnly: false,
@@ -50,25 +63,32 @@ export function HomeInsightsClient({
   const captainPick =
     pickCaptain(scored, rankBy) ?? topScorers[0] ?? bestSquad.captain;
 
+  const filters = (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <AnalysisFilters
+        horizon={horizon}
+        onHorizonChange={setHorizon}
+        includeAccumulated={includeAccumulated}
+        onAccumulatedChange={setIncludeAccumulated}
+        rankBy={rankBy}
+        onToggleRank={toggleRank}
+        onReset={resetFilters}
+        priceBounds={priceBounds}
+        onPriceBoundsChange={setPriceBounds}
+        budget={budget}
+        onBudgetChange={setBudget}
+      />
+      <div className="w-full max-w-md">
+        <TeamIdForm compact />
+      </div>
+    </div>
+  );
+
   if (!captainPick) {
     return (
       <>
         <LiveGwStrip />
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <AnalysisFilters
-            horizon={horizon}
-            onHorizonChange={setHorizon}
-            includeAccumulated={includeAccumulated}
-            onAccumulatedChange={setIncludeAccumulated}
-            rankBy={rankBy}
-            onRankByChange={setRankBy}
-            priceBounds={priceBounds}
-            onPriceBoundsChange={setPriceBounds}
-          />
-          <div className="w-full max-w-md">
-            <TeamIdForm compact />
-          </div>
-        </div>
+        {filters}
         <p className="text-sm text-zinc-500">
           No players match the current price / analyze filters.
         </p>
@@ -76,44 +96,34 @@ export function HomeInsightsClient({
     );
   }
 
+  const bestFormation = formations[0];
+
   return (
     <>
       <LiveGwStrip />
-
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <AnalysisFilters
-          horizon={horizon}
-          onHorizonChange={setHorizon}
-          includeAccumulated={includeAccumulated}
-          onAccumulatedChange={setIncludeAccumulated}
-          rankBy={rankBy}
-          onRankByChange={setRankBy}
-          priceBounds={priceBounds}
-          onPriceBoundsChange={setPriceBounds}
-        />
-        <div className="w-full max-w-md">
-          <TeamIdForm compact />
-        </div>
-      </div>
+      {filters}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Current GW" value={currentEvent?.name ?? "—"} />
-        <Stat label="Next GW" value={nextEvent?.name ?? "—"} />
-        <Stat label="Captain pick" value={captainPick?.webName ?? "—"} accent />
+        <Stat label="Captain pick" value={captainPick.webName} accent />
         <Stat
-          label="Best XV proj"
-          value={bestSquad.projectedPoints.toFixed(1)}
+          label="Best formation"
+          value={bestFormation?.name ?? bestSquad.formation}
           accent
+        />
+        <Stat
+          label={`Budget ${formatPrice(budget)}`}
+          value={`${formatPrice(bestSquad.totalCost)} · ${formatPrice(bestSquad.bank)} left`}
         />
       </div>
 
+      <BestFormationCard formations={formations} horizon={horizon} />
+
       <Card
         title="Highest expected points"
-        subtitle={
-          includeAccumulated
-            ? `Analyze by ${rankBy} · next ${horizon} · including accumulated form`
-            : `Analyze by ${rankBy} · next ${horizon} · accumulated points off`
-        }
+        subtitle={`${rankByLabel(rankBy)} · next ${horizon}${
+          includeAccumulated ? " · form on" : " · form off"
+        }`}
         action={
           <Link
             href="/players"

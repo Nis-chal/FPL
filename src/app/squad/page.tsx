@@ -12,9 +12,9 @@ export default async function SquadPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-50">Best squad</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Model £100.0m / 15-man squad for your chosen fixture horizon. Team
-            rating covers form, fixtures, attacking threat, next-win chance, and
-            availability. Add your team ID to rate your own squad.
+            Build a 15-man squad under your chosen budget (max £100.0m). Change
+            the budget in Filters and the recommended XI rebuilds automatically.
+            Add your team ID to rate your own squad.
           </p>
         </div>
         <SquadClient allPlayers={insights.scored} initialHorizon={5} />

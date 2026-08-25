@@ -1,13 +1,46 @@
-import type { PriceBounds, RankBy, ScoredPlayer } from "@/lib/types";
+import type { FormationRank, PriceBounds, RankBy, ScoredPlayer } from "@/lib/types";
 
-export const RANK_BY_OPTIONS: Array<{ value: RankBy; label: string }> = [
-  { value: "xpts", label: "xPts/GW" },
-  { value: "best_start", label: "Best start" },
-  { value: "xgi90", label: "xGI/90" },
-  { value: "win_cs", label: "Win / CS" },
-  { value: "price", label: "Price / value" },
-  { value: "next_game", label: "Next game" },
-  { value: "next_5", label: "Next 5 games" },
+export const RANK_BY_OPTIONS: Array<{ value: RankBy; label: string; hint: string }> = [
+  {
+    value: "overall",
+    label: "Overall",
+    hint: "Balanced model score (default)",
+  },
+  {
+    value: "xpts",
+    label: "xPts/GW",
+    hint: "Expected points per gameweek",
+  },
+  {
+    value: "best_start",
+    label: "Best start",
+    hint: "Most likely to play minutes",
+  },
+  {
+    value: "xgi90",
+    label: "xGI/90",
+    hint: "Underlying attack rate",
+  },
+  {
+    value: "win_cs",
+    label: "Win / CS",
+    hint: "Club win & clean-sheet odds",
+  },
+  {
+    value: "price",
+    label: "Value",
+    hint: "Projection per £m",
+  },
+  {
+    value: "next_game",
+    label: "Next game",
+    hint: "Horizon = 1 fixture",
+  },
+  {
+    value: "next_5",
+    label: "Next 5",
+    hint: "Horizon = 5 fixtures",
+  },
 ];
 
 export const PRICE_PRESETS: Array<{
@@ -17,33 +50,96 @@ export const PRICE_PRESETS: Array<{
   maxPrice: number | null;
 }> = [
   { id: "all", label: "All", minPrice: null, maxPrice: null },
-  { id: "budget", label: "Budget ≤£5.5m", minPrice: null, maxPrice: 55 },
-  { id: "mid", label: "Mid £5.5–£8.0m", minPrice: 55, maxPrice: 80 },
-  { id: "premium", label: "Premium ≥£8.0m", minPrice: 80, maxPrice: null },
+  { id: "budget", label: "≤£5.5m", minPrice: null, maxPrice: 55 },
+  { id: "mid", label: "£5.5–8.0m", minPrice: 55, maxPrice: 80 },
+  { id: "premium", label: "≥£8.0m", minPrice: 80, maxPrice: null },
 ];
 
-/** Horizon implied by analyze-by mode; null means keep current custom horizon. */
-export function horizonForRankBy(rankBy: RankBy): number | null {
-  if (rankBy === "next_game") return 1;
-  if (rankBy === "next_5") return 5;
+const ALL_RANK_BY: RankBy[] = [
+  "overall",
+  "xpts",
+  "price",
+  "best_start",
+  "xgi90",
+  "win_cs",
+  "next_game",
+  "next_5",
+];
+
+export function rankByLabel(rankBy: RankBy | RankBy[]): string {
+  const list = normalizeRankBy(rankBy);
+  if (list.length === 1) {
+    return RANK_BY_OPTIONS.find((o) => o.value === list[0])?.label ?? list[0];
+  }
+  return list
+    .map((r) => RANK_BY_OPTIONS.find((o) => o.value === r)?.label ?? r)
+    .join(" + ");
+}
+
+export function normalizeRankBy(value: RankBy | RankBy[] | null | undefined): RankBy[] {
+  if (!value) return ["overall"];
+  const list = Array.isArray(value) ? value : [value];
+  const unique = [...new Set(list.filter((r) => ALL_RANK_BY.includes(r)))];
+  return unique.length > 0 ? unique : ["overall"];
+}
+
+/** Horizon implied by selected modes; null if none of the horizon shortcuts are on. */
+export function horizonForRankBy(rankBy: RankBy | RankBy[]): number | null {
+  const list = normalizeRankBy(rankBy);
+  if (list.includes("next_game")) return 1;
+  if (list.includes("next_5")) return 5;
   return null;
 }
 
+/** Parse single or comma-separated rankBy from URL/storage. */
+export function parseRankByList(
+  value: string | null | undefined,
+  fallback: RankBy[] = ["overall"],
+): RankBy[] {
+  if (!value) return fallback;
+  const parts = value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean) as RankBy[];
+  return normalizeRankBy(parts.length > 0 ? parts : fallback);
+}
+
+/** @deprecated Prefer parseRankByList — kept for single-value callers. */
 export function parseRankBy(
   value: string | null | undefined,
-  fallback: RankBy = "xpts",
+  fallback: RankBy = "overall",
 ): RankBy {
-  const allowed: RankBy[] = [
-    "xpts",
-    "price",
-    "best_start",
-    "xgi90",
-    "win_cs",
-    "next_game",
-    "next_5",
-  ];
-  if (value && (allowed as string[]).includes(value)) return value as RankBy;
-  return fallback;
+  return parseRankByList(value, [fallback])[0] ?? fallback;
+}
+
+/**
+ * Toggle a mode in a multi-select set.
+ * - Overall is exclusive when chosen alone; picking another lens drops Overall.
+ * - next_game / next_5 are mutually exclusive with each other.
+ * - Deselecting the last mode restores Overall.
+ */
+export function toggleRankBy(current: RankBy[], mode: RankBy): RankBy[] {
+  const set = new Set(normalizeRankBy(current));
+
+  if (mode === "overall") {
+    return ["overall"];
+  }
+
+  if (set.has(mode)) {
+    set.delete(mode);
+  } else {
+    set.delete("overall");
+    if (mode === "next_game") set.delete("next_5");
+    if (mode === "next_5") set.delete("next_game");
+    set.add(mode);
+  }
+
+  if (set.size === 0) return ["overall"];
+  return ALL_RANK_BY.filter((r) => set.has(r));
+}
+
+export function serializeRankBy(rankBy: RankBy[]): string {
+  return normalizeRankBy(rankBy).join(",");
 }
 
 export function parsePriceBounds(
@@ -85,49 +181,104 @@ function winCsScore(p: ScoredPlayer): number {
   return p.nextWinChance;
 }
 
-export function sortByRank(
-  players: ScoredPlayer[],
-  rankBy: RankBy,
-): ScoredPlayer[] {
-  const sorted = [...players];
-  switch (rankBy) {
+/** Balanced overall score used as the default analysis mode. */
+export function overallScore(p: ScoredPlayer): number {
+  return (
+    p.projectedPoints * 0.5 +
+    p.expectedPointsPerGw * 2.2 * p.startChance +
+    p.attackingThreat * 0.06 +
+    p.valueScore * 1.5 +
+    (p.availabilityFactor < 0.5 ? -8 : 0)
+  );
+}
+
+/** Raw metric for one lens (higher = better). */
+function metricScore(p: ScoredPlayer, mode: RankBy): number {
+  switch (mode) {
+    case "overall":
+      return overallScore(p);
     case "best_start":
-      return sorted.sort(
-        (a, b) =>
-          b.startChance - a.startChance ||
-          b.expectedPointsPerGw - a.expectedPointsPerGw,
-      );
+      return p.startChance * 100;
     case "xgi90":
-      return sorted.sort(
-        (a, b) => b.xgi90 - a.xgi90 || b.expectedPointsPerGw - a.expectedPointsPerGw,
-      );
+      return p.xgi90 * 100;
     case "win_cs":
-      return sorted.sort(
-        (a, b) =>
-          winCsScore(b) - winCsScore(a) ||
-          b.expectedPointsPerGw - a.expectedPointsPerGw,
-      );
+      return winCsScore(p);
     case "price":
-      return sorted.sort(
-        (a, b) =>
-          b.valueScore - a.valueScore || a.price - b.price,
-      );
+      return p.valueScore * 20;
+    case "xpts":
     case "next_game":
     case "next_5":
-    case "xpts":
+      return p.expectedPointsPerGw * 10 + p.projectedPoints;
     default:
-      return sorted.sort(
-        (a, b) =>
-          b.expectedPointsPerGw - a.expectedPointsPerGw ||
-          b.projectedPoints - a.projectedPoints,
-      );
+      return overallScore(p);
   }
 }
 
-/** Captain pick respects active rank mode among likely starters. */
+/** Combine selected lenses into one comparable score (equal weight, z-scored per metric). */
+export function combinedRankScore(
+  p: ScoredPlayer,
+  rankBy: RankBy | RankBy[],
+  norms: Map<RankBy, { min: number; max: number }>,
+): number {
+  const modes = normalizeRankBy(rankBy).filter(
+    (m) => m !== "next_game" && m !== "next_5",
+  );
+  const active = modes.length > 0 ? modes : (["overall"] as RankBy[]);
+
+  let sum = 0;
+  for (const mode of active) {
+    const raw = metricScore(p, mode);
+    const n = norms.get(mode);
+    if (!n || n.max <= n.min) {
+      sum += raw;
+    } else {
+      sum += (raw - n.min) / (n.max - n.min);
+    }
+  }
+  return sum / active.length;
+}
+
+function buildNorms(
+  players: ScoredPlayer[],
+  modes: RankBy[],
+): Map<RankBy, { min: number; max: number }> {
+  const norms = new Map<RankBy, { min: number; max: number }>();
+  for (const mode of modes) {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const p of players) {
+      const v = metricScore(p, mode);
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+    if (!Number.isFinite(min)) min = 0;
+    if (!Number.isFinite(max)) max = 1;
+    norms.set(mode, { min, max });
+  }
+  return norms;
+}
+
+export function sortByRank(
+  players: ScoredPlayer[],
+  rankBy: RankBy | RankBy[],
+): ScoredPlayer[] {
+  const modes = normalizeRankBy(rankBy);
+  const scoreModes = modes.filter((m) => m !== "next_game" && m !== "next_5");
+  const active = scoreModes.length > 0 ? scoreModes : (["overall"] as RankBy[]);
+  const norms = buildNorms(players, active);
+
+  return [...players].sort((a, b) => {
+    const diff =
+      combinedRankScore(b, active, norms) - combinedRankScore(a, active, norms);
+    if (Math.abs(diff) > 1e-9) return diff;
+    return b.projectedPoints - a.projectedPoints;
+  });
+}
+
+/** Captain pick respects active rank modes among likely starters. */
 export function pickCaptain(
   players: ScoredPlayer[],
-  rankBy: RankBy,
+  rankBy: RankBy | RankBy[],
 ): ScoredPlayer | undefined {
   const pool = players.filter(
     (p) => p.startChance >= 0.5 && p.availabilityFactor >= 0.5,
@@ -135,3 +286,6 @@ export function pickCaptain(
   const ranked = sortByRank(pool.length > 0 ? pool : players, rankBy);
   return ranked[0];
 }
+
+/** Re-export type for consumers that only import ranking helpers. */
+export type { FormationRank };

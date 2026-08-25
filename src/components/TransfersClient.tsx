@@ -15,7 +15,7 @@ import { Card, ErrorBox } from "@/components/ui";
 import { useTeamId } from "@/hooks/useTeamId";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
-import { filterByPrice, sortByRank } from "@/lib/ranking";
+import { filterByPrice, rankByLabel, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import { bestInboundTargets } from "@/lib/transfers";
 import type { ScoredPlayer, TeamRating, TransferSuggestion } from "@/lib/types";
@@ -32,9 +32,12 @@ export function TransfersClient({
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
   const {
     rankBy,
-    setRankBy,
+    toggleRank,
+    resetFilters,
     horizon,
     setHorizon,
+    budget,
+    setBudget,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -97,9 +100,12 @@ export function TransfersClient({
           includeAccumulated={includeAccumulated}
           onAccumulatedChange={setIncludeAccumulated}
           rankBy={rankBy}
-          onRankByChange={setRankBy}
+          onToggleRank={toggleRank}
+          onReset={resetFilters}
           priceBounds={priceBounds}
           onPriceBoundsChange={setPriceBounds}
+          budget={budget}
+          onBudgetChange={setBudget}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -118,7 +124,7 @@ export function TransfersClient({
           title={`Personal transfers${entryName ? ` · ${entryName}` : ""}`}
           subtitle={
             hint ||
-            `Swaps for the next ${horizon} fixtures — analyze by ${rankBy}`
+            `Swaps for the next ${horizon} fixtures — ${rankByLabel(rankBy)}`
           }
         >
           <div className="space-y-3">
@@ -200,7 +206,7 @@ export function TransfersClient({
 
       <Card
         title="Best inbound targets"
-        subtitle={`League-wide for next ${horizon} · analyze by ${rankBy}`}
+        subtitle={`League-wide for next ${horizon} · ${rankByLabel(rankBy)}`}
       >
         <PlayerTable players={targets} showThreat />
       </Card>
