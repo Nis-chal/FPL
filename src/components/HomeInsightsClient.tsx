@@ -108,7 +108,27 @@ export function HomeInsightsClient({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Current GW" value={currentEvent?.name ?? "—"} />
-        <Stat label="Captain pick" value={captainPick.webName} accent />
+        <Stat
+          label="Captain pick"
+          value={captainPick.webName}
+          accent
+          tip={
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                Recommended captain
+              </div>
+              <p className="text-xs text-zinc-300">
+                {captainPick.teamShort} · {captainPick.position} ·{" "}
+                {formatPrice(captainPick.price)} ·{" "}
+                {Math.round(captainPick.startChance * 100)}% start ·{" "}
+                <span className="font-semibold text-emerald-400">
+                  {captainPick.expectedPointsPerGw.toFixed(1)} xPts/GW
+                </span>
+              </p>
+              <Reasons reasons={captainPick.reasons} />
+            </div>
+          }
+        />
         <Stat
           label="Best formation"
           value={bestFormation?.name ?? bestSquad.formation}
@@ -136,25 +156,6 @@ export function HomeInsightsClient({
           </Link>
         }
       >
-        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
-          <div className="text-xs uppercase tracking-wider text-emerald-400">
-            Recommended captain
-          </div>
-          <div className="mt-1 flex flex-wrap items-baseline gap-3">
-            <span className="text-2xl font-bold text-zinc-50">
-              {captainPick.webName}
-            </span>
-            <span className="text-sm text-zinc-400">
-              {captainPick.teamShort} · {captainPick.position} ·{" "}
-              {formatPrice(captainPick.price)} ·{" "}
-              {Math.round(captainPick.startChance * 100)}% start
-            </span>
-            <span className="text-lg font-bold text-emerald-400">
-              {captainPick.expectedPointsPerGw.toFixed(1)} xPts/GW
-            </span>
-          </div>
-          <Reasons reasons={captainPick.reasons} />
-        </div>
         <PlayerTable players={topScorers} showThreat />
       </Card>
     </>

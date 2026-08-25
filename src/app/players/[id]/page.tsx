@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { FixtureStrip } from "@/components/FixturePill";
+import { LatestNewsCard } from "@/components/LatestNews";
 import { PlayerPhoto } from "@/components/PlayerMedia";
 import {
   PastSeasonsTable,
@@ -65,6 +66,17 @@ export default async function PlayerDetailPage({
           </div>
         </div>
 
+        <LatestNewsCard
+          items={[
+            {
+              news: player.news,
+              newsAdded: player.newsAdded,
+              status: player.status,
+              chanceOfPlaying: player.chanceOfPlaying,
+            },
+          ]}
+        />
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="xPts / GW"
@@ -90,11 +102,6 @@ export default async function PlayerDetailPage({
           subtitle="Expected points from starts, xG/xA, fixtures"
         >
           <Reasons reasons={player.reasons} />
-          {player.news && (
-            <p className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-              {player.news}
-            </p>
-          )}
         </Card>
 
         <div className="grid gap-4 lg:grid-cols-2">

@@ -69,6 +69,22 @@ export async function getClubDetail(teamId: number, horizon = 5) {
     (p) => p.teamId === teamId,
   );
 
+  const news = scored
+    .filter((p) => p.news?.trim())
+    .sort((a, b) => {
+      const at = a.newsAdded ? new Date(a.newsAdded).getTime() : 0;
+      const bt = b.newsAdded ? new Date(b.newsAdded).getTime() : 0;
+      return bt - at;
+    })
+    .map((p) => ({
+      playerId: p.id,
+      playerName: p.webName,
+      news: p.news,
+      newsAdded: p.newsAdded,
+      status: p.status,
+      chanceOfPlaying: p.chanceOfPlaying,
+    }));
+
   const vsUpcoming = upcoming.map((u) => {
     const meetings = headToHeadFixtures(fixtures, teamId, u.opponentId, teams);
     return {
@@ -87,6 +103,7 @@ export async function getClubDetail(teamId: number, horizon = 5) {
     upcoming,
     recent,
     vsUpcoming,
+    news,
     players: scored,
     horizon,
   };
@@ -153,6 +170,43 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
     };
   }
 
+  const upcomingFixtures = summary.fixtures.slice(0, 7).map((f) => ({
+    opponentId: f.is_home ? f.team_a : f.team_h,
+    opponentName:
+      teams.get(f.is_home ? f.team_a : f.team_h)?.name ?? "Unknown",
+    opponentShort:
+      teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
+    event: f.event,
+    isHome: f.is_home,
+    difficulty: f.difficulty,
+  }));
+
+  const element = bootstrap.elements.find((e) => e.id === playerId);
+  const { fetchHistoricalH2hByOpponent } = await import(
+    "@/lib/historical-h2h"
+  );
+  let historicalByShort: Awaited<
+    ReturnType<typeof fetchHistoricalH2hByOpponent>
+  > = new Map();
+  try {
+    if (element?.code) {
+      historicalByShort = await fetchHistoricalH2hByOpponent(
+        element.code,
+        upcomingFixtures.map((u) => u.opponentShort),
+      );
+    }
+  } catch {
+    historicalByShort = new Map();
+  }
+
+  const currentEvent = getCurrentEvent(bootstrap.events);
+  const seasonStartYear = currentEvent
+    ? new Date(currentEvent.deadline_time).getUTCFullYear() -
+      (new Date(currentEvent.deadline_time).getUTCMonth() < 6 ? 1 : 0)
+    : new Date().getUTCFullYear();
+  // PL season spanning Aug–May: label like 2026/27
+  const currentSeasonLabel = `${seasonStartYear}/${String(seasonStartYear + 1).slice(-2)}`;
+
   return {
     player,
     history,
@@ -176,23 +230,11 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
       result: null as null,
     })),
     historyPast: [...summary.history_past].slice(0, 5),
-    vsUpcoming: buildVsUpcomingClubs(
-      summary.fixtures.slice(0, 7).map((f) => ({
-        opponentId: f.is_home ? f.team_a : f.team_h,
-        opponentName:
-          teams.get(f.is_home ? f.team_a : f.team_h)?.name ?? "Unknown",
-        opponentShort:
-          teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
-        event: f.event,
-        isHome: f.is_home,
-        difficulty: f.difficulty,
-      })),
-      historyFull,
-      [...summary.history_past]
-        .slice()
-        .sort((a, b) => b.season_name.localeCompare(a.season_name))
-        .slice(0, 5),
-    ),
+    vsUpcoming: buildVsUpcomingClubs(upcomingFixtures, historyFull, {
+      currentSeasonLabel,
+      historicalByShort,
+      limit: 5,
+    }),
     horizon,
   };
 }

@@ -33,14 +33,8 @@ export type VsOpponentMeeting = InvolvementStats & {
   teamScore: number | null;
   opponentScore: number | null;
   result: "W" | "D" | "L" | null;
-};
-
-export type PastSeasonSlice = InvolvementStats & {
-  seasonName: string;
-  points: number;
-  goals: number;
-  assists: number;
-  minutes: number;
+  /** e.g. "2024/25" or "2025/26" */
+  seasonLabel: string;
 };
 
 export type VsUpcomingClub = {
@@ -55,11 +49,8 @@ export type VsUpcomingClub = {
   avgPoints: number;
   totalGoals: number;
   totalAssists: number;
+  /** Up to last 5 meetings (this + prior seasons). */
   meetings: VsOpponentMeeting[];
-  /** Totals across this-season meetings (0 if none). */
-  involvement: InvolvementStats;
-  /** When no this-season H2H: last up to 5 FPL seasons (overall — FPL has no past H2H). */
-  pastSeasons: PastSeasonSlice[];
 };
 
 function involvementFromHistory(
@@ -83,43 +74,12 @@ function involvementFromHistory(
   };
 }
 
-function involvementFromPast(s: PastSeasonStats): InvolvementStats {
-  return {
-    threat: num(s.threat),
-    creativity: num(s.creativity),
-    defensiveContribution: s.defensive_contribution ?? 0,
-    clearancesBlocksInterceptions: s.clearances_blocks_interceptions ?? 0,
-    tackles: s.tackles ?? 0,
-    recoveries: s.recoveries ?? 0,
-  };
-}
-
-function sumInvolvement(rows: InvolvementStats[]): InvolvementStats {
-  return rows.reduce(
-    (acc, r) => ({
-      threat: acc.threat + r.threat,
-      creativity: acc.creativity + r.creativity,
-      defensiveContribution:
-        acc.defensiveContribution + r.defensiveContribution,
-      clearancesBlocksInterceptions:
-        acc.clearancesBlocksInterceptions + r.clearancesBlocksInterceptions,
-      tackles: acc.tackles + r.tackles,
-      recoveries: acc.recoveries + r.recoveries,
-    }),
-    {
-      threat: 0,
-      creativity: 0,
-      defensiveContribution: 0,
-      clearancesBlocksInterceptions: 0,
-      tackles: 0,
-      recoveries: 0,
-    },
-  );
+function meetingKey(m: Pick<VsOpponentMeeting, "kickoffTime" | "round" | "seasonLabel">): string {
+  return `${m.seasonLabel}|${m.kickoffTime ?? ""}|${m.round}`;
 }
 
 /**
- * For each upcoming opponent, summarise this-season meetings.
- * If none, attach last 5 overall FPL seasons (API has no per-opponent past history).
+ * For each upcoming opponent, last N H2H meetings (this season + archives).
  */
 export function buildVsUpcomingClubs(
   upcoming: Array<{
@@ -151,23 +111,19 @@ export function buildVsUpcomingClubs(
       | "recoveries"
     >
   >,
-  pastSeasons: PastSeasonStats[] = [],
+  options?: {
+    currentSeasonLabel?: string;
+    historicalByShort?: Map<string, VsOpponentMeeting[]>;
+    limit?: number;
+  },
 ): VsUpcomingClub[] {
-  const pastSlices: PastSeasonSlice[] = [...pastSeasons]
-    .slice(0, 5)
-    .map((s) => ({
-      seasonName: s.season_name,
-      points: s.total_points,
-      goals: s.goals_scored,
-      assists: s.assists,
-      minutes: s.minutes,
-      ...involvementFromPast(s),
-    }));
+  const limit = options?.limit ?? 5;
+  const currentSeasonLabel = options?.currentSeasonLabel ?? "2026/27";
+  const historicalByShort = options?.historicalByShort;
 
   return upcoming.map((u) => {
-    const meetings = history
+    const thisSeason = history
       .filter((h) => h.opponent_team === u.opponentId)
-      .sort((a, b) => b.round - a.round)
       .map((h) => {
         const teamScore = h.was_home ? h.team_h_score : h.team_a_score;
         const opponentScore = h.was_home ? h.team_a_score : h.team_h_score;
@@ -188,10 +144,28 @@ export function buildVsUpcomingClubs(
           teamScore,
           opponentScore,
           result,
+          seasonLabel: currentSeasonLabel,
           ...involvementFromHistory(h),
-        };
+        } satisfies VsOpponentMeeting;
       });
 
+    const archived = historicalByShort?.get(u.opponentShort) ?? [];
+    const seen = new Set<string>();
+    const merged: VsOpponentMeeting[] = [];
+    for (const m of [...thisSeason, ...archived]) {
+      const key = meetingKey(m);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(m);
+    }
+
+    merged.sort((a, b) => {
+      const at = a.kickoffTime ? new Date(a.kickoffTime).getTime() : 0;
+      const bt = b.kickoffTime ? new Date(b.kickoffTime).getTime() : 0;
+      return bt - at;
+    });
+
+    const meetings = merged.slice(0, limit);
     const totalPoints = meetings.reduce((s, m) => s + m.points, 0);
     const totalGoals = meetings.reduce((s, m) => s + m.goals, 0);
     const totalAssists = meetings.reduce((s, m) => s + m.assists, 0);
@@ -210,8 +184,6 @@ export function buildVsUpcomingClubs(
       totalGoals,
       totalAssists,
       meetings,
-      involvement: sumInvolvement(meetings),
-      pastSeasons: games === 0 ? pastSlices : [],
     };
   });
 }

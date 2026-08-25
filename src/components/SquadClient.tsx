@@ -334,16 +334,32 @@ export function SquadClient({
           seasonBasis === "prior" ? "prior seasons" : "this season"
         })`}
       >
-        <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
-          <div className="text-xs uppercase tracking-wider text-emerald-400">
-            Captain pick
-          </div>
-          <Reasons
-            reasons={
-              activeModel.startingXi.find((p) => p.id === activeModel.captainId)
-                ?.reasons ?? built.captain.reasons
-            }
-          />
+        <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-xs uppercase tracking-wider text-zinc-500">
+            Captain
+          </span>
+          <span
+            className="group relative cursor-help font-semibold text-emerald-400 underline decoration-emerald-500/40 decoration-dotted underline-offset-2"
+            tabIndex={0}
+          >
+            {activeModel.startingXi.find((p) => p.id === activeModel.captainId)
+              ?.webName ?? built.captain.webName}
+            <span
+              role="tooltip"
+              className="pointer-events-none absolute left-0 top-full z-30 mt-2 hidden w-72 rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-left font-normal shadow-xl group-hover:block group-focus-within:block"
+            >
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                Recommended captain
+              </div>
+              <Reasons
+                reasons={
+                  activeModel.startingXi.find(
+                    (p) => p.id === activeModel.captainId,
+                  )?.reasons ?? built.captain.reasons
+                }
+              />
+            </span>
+          </span>
         </div>
         <PitchView
           title="Starting XI"

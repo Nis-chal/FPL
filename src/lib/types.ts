@@ -29,6 +29,8 @@ export interface FplEvent {
 
 export interface FplElement {
   id: number;
+  /** Stable FPL player code (persists across seasons). */
+  code: number;
   web_name: string;
   first_name: string;
   second_name: string;
@@ -62,6 +64,7 @@ export interface FplElement {
   expected_goals_conceded: string;
   status: string;
   news: string;
+  news_added?: string | null;
   chance_of_playing_next_round: number | null;
   chance_of_playing_this_round: number | null;
   ep_next: string | null;
@@ -326,6 +329,8 @@ export interface ScoredPlayer {
   minutes: number;
   status: string;
   news: string;
+  /** ISO timestamp when FPL last updated the news string. */
+  newsAdded: string | null;
   chanceOfPlaying: number | null;
   /** Live GW points so far (when overlay applied). */
   livePoints?: number | null;

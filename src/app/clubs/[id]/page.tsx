@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ClubVsUpcomingSection } from "@/components/ClubVsUpcoming";
 import { FixtureStrip } from "@/components/FixturePill";
+import { LatestNewsCard } from "@/components/LatestNews";
 import { PlayerTable } from "@/components/PlayerTable";
 import { Card, ErrorBox } from "@/components/ui";
 import { getClubDetail } from "@/lib/insights";
@@ -35,6 +36,12 @@ export default async function ClubDetailPage({
           </p>
         </div>
 
+        <LatestNewsCard
+          title="Squad news"
+          emptyHint="No FPL news flagged for this squad."
+          items={detail.news}
+        />
+
         <div className="grid gap-4 lg:grid-cols-2">
           <Card title="Next 7 fixtures" subtitle="Fixture difficulty from FPL">
             <FixtureStrip fixtures={detail.upcoming} />
@@ -48,7 +55,9 @@ export default async function ClubDetailPage({
                     GW{f.event ?? "?"} · {f.isHome ? "Home" : "Away"} vs{" "}
                     {f.opponentName}
                   </span>
-                  <span className="font-mono text-zinc-400">FDR {f.difficulty}</span>
+                  <span className="font-mono text-zinc-400">
+                    FDR {f.difficulty}
+                  </span>
                 </li>
               ))}
               {detail.upcoming.length === 0 && (
@@ -93,7 +102,9 @@ export default async function ClubDetailPage({
                 </li>
               ))}
               {detail.recent.length === 0 && (
-                <li className="text-sm text-zinc-500">No finished matches yet.</li>
+                <li className="text-sm text-zinc-500">
+                  No finished matches yet.
+                </li>
               )}
             </ul>
           </Card>

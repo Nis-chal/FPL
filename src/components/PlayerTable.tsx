@@ -1,11 +1,50 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo, useState } from "react";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { ClubKit, PlayerPhoto } from "@/components/PlayerMedia";
 import type { ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import { FixtureStrip } from "@/components/FixturePill";
+
+type SortKey =
+  | "default"
+  | "totalPoints"
+  | "expectedPointsPerGw"
+  | "price"
+  | "startChance"
+  | "xgi90";
+
+function SortHeader({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: "asc" | "desc";
+  onClick: () => void;
+}) {
+  return (
+    <th className="px-3 py-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className={[
+          "inline-flex items-center gap-1 uppercase tracking-wider transition hover:text-zinc-200",
+          active ? "text-emerald-400" : "text-zinc-500",
+        ].join(" ")}
+      >
+        {label}
+        <span className="text-[9px] opacity-80" aria-hidden>
+          {active ? (dir === "desc" ? "↓" : "↑") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+}
 
 export function PlayerRow({
   player,
@@ -57,7 +96,12 @@ export function PlayerRow({
           </div>
         </div>
       </td>
-      <td className="px-3 py-2 text-sm text-zinc-300">{formatPrice(player.price)}</td>
+      <td className="px-3 py-2 text-sm font-semibold tabular-nums text-zinc-100">
+        {player.totalPoints}
+      </td>
+      <td className="px-3 py-2 text-sm text-zinc-300">
+        {formatPrice(player.price)}
+      </td>
       <td className="px-3 py-2 text-sm text-zinc-300">
         {Math.round(player.startChance * 100)}%
       </td>
@@ -109,6 +153,29 @@ export function PlayerTable({
   showFixtures?: boolean;
   showThreat?: boolean;
 }) {
+  const [sortKey, setSortKey] = useState<SortKey>("default");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+      return;
+    }
+    setSortKey(key);
+    setSortDir("desc");
+  };
+
+  const sorted = useMemo(() => {
+    if (sortKey === "default") return players;
+    const mult = sortDir === "desc" ? -1 : 1;
+    return [...players].sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (av === bv) return b.totalPoints - a.totalPoints;
+      return (av < bv ? -1 : 1) * mult;
+    });
+  }, [players, sortKey, sortDir]);
+
   return (
     <div className="overflow-x-auto rounded-xl border border-zinc-800">
       <table className="min-w-full text-left">
@@ -116,12 +183,38 @@ export function PlayerTable({
           <tr>
             <th className="px-3 py-2">#</th>
             <th className="px-3 py-2">Player</th>
-            <th className="px-3 py-2">Price</th>
-            <th className="px-3 py-2">Start%</th>
-            <th className="px-3 py-2">xPts/GW</th>
+            <SortHeader
+              label="Pts"
+              active={sortKey === "totalPoints"}
+              dir={sortDir}
+              onClick={() => toggleSort("totalPoints")}
+            />
+            <SortHeader
+              label="Price"
+              active={sortKey === "price"}
+              dir={sortDir}
+              onClick={() => toggleSort("price")}
+            />
+            <SortHeader
+              label="Start%"
+              active={sortKey === "startChance"}
+              dir={sortDir}
+              onClick={() => toggleSort("startChance")}
+            />
+            <SortHeader
+              label="xPts/GW"
+              active={sortKey === "expectedPointsPerGw"}
+              dir={sortDir}
+              onClick={() => toggleSort("expectedPointsPerGw")}
+            />
             {showThreat && (
               <>
-                <th className="px-3 py-2">xGI/90</th>
+                <SortHeader
+                  label="xGI/90"
+                  active={sortKey === "xgi90"}
+                  dir={sortDir}
+                  onClick={() => toggleSort("xgi90")}
+                />
                 <th className="px-3 py-2">Win/CS</th>
               </>
             )}
@@ -130,7 +223,7 @@ export function PlayerTable({
           </tr>
         </thead>
         <tbody>
-          {players.map((player, index) => (
+          {sorted.map((player, index) => (
             <PlayerRow
               key={player.id}
               player={player}

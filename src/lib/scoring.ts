@@ -194,6 +194,7 @@ function scoreOne(
     minutes: el.minutes,
     status: el.status,
     news: el.news,
+    newsAdded: el.news_added ?? null,
     chanceOfPlaying: el.chance_of_playing_next_round,
     recentAvgPoints: Number(recentAvg.toFixed(2)),
     recentGames: gamesProxy,
