@@ -20,7 +20,8 @@ export function PlayersClient({
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<Position | "ALL">("ALL");
   const [teamId, setTeamId] = useState<number | "ALL">("ALL");
-  const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const { seasonBasis, setSeasonBasis, includeAccumulated } =
+    useAccumulatedPoints(false);
   const {
     rankBy,
     toggleRank,
@@ -36,8 +37,8 @@ export function PlayersClient({
   const ranked = useMemo(() => {
     const horizonApplied = applyHorizon(players, horizon, includeAccumulated);
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy);
-  }, [players, horizon, includeAccumulated, priceBounds, rankBy]);
+    return sortByRank(priced, rankBy, seasonBasis);
+  }, [players, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -60,8 +61,8 @@ export function PlayersClient({
       <AnalysisFilters
         horizon={horizon}
         onHorizonChange={setHorizon}
-        includeAccumulated={includeAccumulated}
-        onAccumulatedChange={setIncludeAccumulated}
+        seasonBasis={seasonBasis}
+        onSeasonBasisChange={setSeasonBasis}
         rankBy={rankBy}
         onToggleRank={toggleRank}
         onReset={resetFilters}
@@ -107,8 +108,8 @@ export function PlayersClient({
         </select>
       </div>
       <p className="text-xs text-zinc-500">
-        {filtered.length} players · {rankByLabel(rankBy)}
-        {includeAccumulated ? " · form on" : " · form off"}
+        {filtered.length} players · {rankByLabel(rankBy)} ·{" "}
+        {seasonBasis === "prior" ? "prior seasons" : "this season"}
       </p>
       <PlayerTable players={preview} showThreat />
     </div>

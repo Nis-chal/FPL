@@ -17,7 +17,7 @@ import {
   sortByRank,
 } from "@/lib/ranking";
 import { applyHorizon, topProjected } from "@/lib/scoring";
-import { buildBestSquad, rankFormations } from "@/lib/squad";
+import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import type { FplEvent, ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
@@ -30,7 +30,8 @@ export function HomeInsightsClient({
   currentEvent: FplEvent | null;
   nextEvent: FplEvent | null;
 }) {
-  const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const { seasonBasis, setSeasonBasis, includeAccumulated } =
+    useAccumulatedPoints(false);
   const {
     rankBy,
     toggleRank,
@@ -46,12 +47,12 @@ export function HomeInsightsClient({
   const scored = useMemo(() => {
     const horizonApplied = applyHorizon(allPlayers, horizon, includeAccumulated);
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
+    return sortByRank(priced, rankBy, seasonBasis);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
 
   const bestSquad = useMemo(
-    () => buildBestSquad(scored, budget),
-    [scored, budget],
+    () => buildRecommendedSquad(scored, budget, horizon, rankBy),
+    [scored, budget, horizon, rankBy],
   );
   const formations = useMemo(() => rankFormations(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
@@ -61,15 +62,17 @@ export function HomeInsightsClient({
   }).slice(0, 12);
 
   const captainPick =
-    pickCaptain(scored, rankBy) ?? topScorers[0] ?? bestSquad.captain;
+    pickCaptain(scored, rankBy, seasonBasis) ??
+    topScorers[0] ??
+    bestSquad.captain;
 
   const filters = (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <AnalysisFilters
         horizon={horizon}
         onHorizonChange={setHorizon}
-        includeAccumulated={includeAccumulated}
-        onAccumulatedChange={setIncludeAccumulated}
+        seasonBasis={seasonBasis}
+        onSeasonBasisChange={setSeasonBasis}
         rankBy={rankBy}
         onToggleRank={toggleRank}
         onReset={resetFilters}
@@ -121,9 +124,9 @@ export function HomeInsightsClient({
 
       <Card
         title="Highest expected points"
-        subtitle={`${rankByLabel(rankBy)} · next ${horizon}${
-          includeAccumulated ? " · form on" : " · form off"
-        }`}
+        subtitle={`${rankByLabel(rankBy)} · ${
+          seasonBasis === "prior" ? "prior seasons" : "this season"
+        } · next ${horizon}`}
         action={
           <Link
             href="/players"

@@ -4,7 +4,7 @@ import { FixtureStrip } from "@/components/FixturePill";
 import { getBootstrap, getFixtures } from "@/lib/fpl-client";
 import { nextFixturesForTeam, recentFixturesForTeam, teamMap } from "@/lib/utils";
 
-export const revalidate = 60;
+export const revalidate = 30;
 
 export default async function ClubsPage() {
   try {

@@ -2,8 +2,11 @@ import type {
   BestSquad,
   FormationRank,
   Position,
+  RankBy,
   ScoredPlayer,
 } from "@/lib/types";
+import { playerRatingContribution } from "@/lib/ranking";
+import { rateTeam } from "@/lib/team-rating";
 import { BUDGET, SQUAD_LIMITS } from "@/lib/utils";
 
 export const FORMATIONS: Array<{
@@ -339,4 +342,239 @@ export function buildBestSquad(
     ),
     bank: remaining,
   };
+}
+
+function finalizeSquad(
+  squad: ScoredPlayer[],
+  remaining: number,
+  budget: number,
+  candidates: ScoredPlayer[],
+  scored: ScoredPlayer[],
+  optimize: "points" | "rating",
+  horizon: number,
+): BestSquad {
+  let bestXi = pickBestXi(squad);
+  if (optimize === "rating") {
+    let bestScore = rateTeam(squad, bestXi.startingXi, horizon).score;
+    for (const formation of FORMATIONS) {
+      const byPos = (pos: Position) =>
+        [...squad.filter((p) => p.position === pos)].sort(
+          (a, b) =>
+            playerRatingContribution(b) - playerRatingContribution(a),
+        );
+      const gk = byPos("GKP");
+      const def = byPos("DEF");
+      const mid = byPos("MID");
+      const fwd = byPos("FWD");
+      if (
+        gk.length < 1 ||
+        def.length < formation.DEF ||
+        mid.length < formation.MID ||
+        fwd.length < formation.FWD
+      ) {
+        continue;
+      }
+      const startingXi = [
+        gk[0],
+        ...def.slice(0, formation.DEF),
+        ...mid.slice(0, formation.MID),
+        ...fwd.slice(0, formation.FWD),
+      ];
+      const startIds = new Set(startingXi.map((p) => p.id));
+      const bench = squad.filter((p) => !startIds.has(p.id));
+      const projectedPoints = Number(
+        startingXi.reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
+      );
+      const score = rateTeam(squad, startingXi, horizon).score;
+      if (score > bestScore) {
+        bestScore = score;
+        bestXi = {
+          startingXi,
+          bench,
+          formation: formation.name,
+          projectedPoints,
+        };
+      }
+    }
+  }
+
+  const { startingXi, bench, formation, projectedPoints } = bestXi;
+  const orderedXi = [...startingXi].sort((a, b) =>
+    optimize === "rating"
+      ? playerRatingContribution(b) - playerRatingContribution(a)
+      : b.projectedPoints - a.projectedPoints,
+  );
+  const captain = orderedXi[0] ?? squad[0];
+  const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
+
+  if (!captain) {
+    const fallback = candidates[0] ?? scored[0];
+    if (!fallback) {
+      throw new Error("No players available to build a squad");
+    }
+    return {
+      squad,
+      startingXi: [],
+      bench: squad,
+      captain: fallback,
+      viceCaptain: fallback,
+      formation: "—",
+      totalCost: budget - remaining,
+      projectedPoints: 0,
+      bank: remaining,
+    };
+  }
+
+  return {
+    squad: [...squad].sort(
+      (a, b) =>
+        a.positionId - b.positionId || b.projectedPoints - a.projectedPoints,
+    ),
+    startingXi,
+    bench,
+    captain,
+    viceCaptain,
+    formation,
+    totalCost: budget - remaining,
+    projectedPoints: Number(
+      (projectedPoints + captain.projectedPoints).toFixed(2),
+    ),
+    bank: remaining,
+  };
+}
+
+/**
+ * Build a 15 within budget (≤ £100m) that maximises team rating grade/score.
+ * May leave bank unused if that yields a higher-rated XI.
+ */
+export function buildBestSquadByRating(
+  scored: ScoredPlayer[],
+  budgetTenths: number = BUDGET,
+  horizon = 5,
+): BestSquad {
+  const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
+  const candidates = scored
+    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4)
+    .filter((p) => p.availabilityFactor >= 0.35);
+
+  const squad: ScoredPlayer[] = [];
+  let remaining = budget;
+  const positions: Position[] = ["GKP", "DEF", "MID", "FWD"];
+
+  for (const pos of positions) {
+    const needed = SQUAD_LIMITS[pos];
+    const pool = candidates
+      .filter((p) => p.position === pos)
+      .sort(
+        (a, b) =>
+          playerRatingContribution(b) - playerRatingContribution(a) ||
+          b.projectedPoints - a.projectedPoints,
+      );
+    for (const player of pool) {
+      if (squad.filter((p) => p.position === pos).length >= needed) break;
+      if (!canAdd(player, squad, remaining)) continue;
+      squad.push(player);
+      remaining -= player.price;
+    }
+  }
+
+  if (squad.length < 15) {
+    const pool = [...candidates].sort(
+      (a, b) =>
+        playerRatingContribution(b) / Math.max(1, b.price) -
+          playerRatingContribution(a) / Math.max(1, a.price) ||
+        a.price - b.price,
+    );
+    for (const player of pool) {
+      if (squad.length >= 15) break;
+      if (!canAdd(player, squad, remaining)) continue;
+      squad.push(player);
+      remaining -= player.price;
+    }
+  }
+
+  // Rating-driven upgrade pass (including cheaper → better rating swaps)
+  let improved = true;
+  let guard = 0;
+  while (improved && guard < 40) {
+    improved = false;
+    guard += 1;
+    const current = finalizeSquad(
+      squad,
+      remaining,
+      budget,
+      candidates,
+      scored,
+      "rating",
+      horizon,
+    );
+    const currentScore = rateTeam(
+      current.squad,
+      current.startingXi,
+      horizon,
+    ).score;
+
+    const upgrades = [...candidates].sort(
+      (a, b) => playerRatingContribution(b) - playerRatingContribution(a),
+    );
+    outer: for (const candidate of upgrades) {
+      if (squad.some((p) => p.id === candidate.id)) continue;
+      const samePos = squad.filter((p) => p.position === candidate.position);
+      for (const weak of samePos) {
+        const afterRemove = squad.filter((p) => p.id !== weak.id);
+        const bank = remaining + weak.price;
+        const clubOk =
+          afterRemove.filter((p) => p.teamId === candidate.teamId).length < 3;
+        if (!clubOk || candidate.price > bank) continue;
+
+        const trial = [...afterRemove, candidate];
+        const trialRemaining = bank - candidate.price;
+        const trialBuilt = finalizeSquad(
+          trial,
+          trialRemaining,
+          budget,
+          candidates,
+          scored,
+          "rating",
+          horizon,
+        );
+        const trialScore = rateTeam(
+          trialBuilt.squad,
+          trialBuilt.startingXi,
+          horizon,
+        ).score;
+        if (trialScore > currentScore) {
+          const idx = squad.findIndex((p) => p.id === weak.id);
+          squad[idx] = candidate;
+          remaining = trialRemaining;
+          improved = true;
+          break outer;
+        }
+      }
+    }
+  }
+
+  return finalizeSquad(
+    squad,
+    remaining,
+    budget,
+    candidates,
+    scored,
+    "rating",
+    horizon,
+  );
+}
+
+/** Choose points or rating optimiser from active analyze filters. */
+export function buildRecommendedSquad(
+  scored: ScoredPlayer[],
+  budgetTenths: number,
+  horizon: number,
+  rankBy: RankBy | RankBy[],
+): BestSquad {
+  const modes = Array.isArray(rankBy) ? rankBy : [rankBy];
+  if (modes.includes("team_rating")) {
+    return buildBestSquadByRating(scored, budgetTenths, horizon);
+  }
+  return buildBestSquad(scored, budgetTenths);
 }

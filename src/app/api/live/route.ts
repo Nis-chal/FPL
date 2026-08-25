@@ -25,7 +25,10 @@ export async function GET() {
     const eventFixtures = fixtures.filter((f) => f.event === current.id);
     const isLive =
       !current.finished &&
-      eventFixtures.some((f) => f.started === true && !f.finished);
+      eventFixtures.some(
+        (f) =>
+          f.started === true && !f.finished && !f.finished_provisional,
+      );
 
     let liveElements: Awaited<ReturnType<typeof getEventLive>>["elements"] = [];
     if (!current.finished) {
@@ -95,7 +98,8 @@ export async function GET() {
         id: f.id,
         kickoff_time: f.kickoff_time,
         started: f.started,
-        finished: f.finished,
+        finished: f.finished || f.finished_provisional,
+        finished_provisional: f.finished_provisional,
         minutes: f.minutes,
         team_h: f.team_h,
         team_a: f.team_a,

@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { FixtureStrip } from "@/components/FixturePill";
 import { PlayerPhoto } from "@/components/PlayerMedia";
+import {
+  PastSeasonsTable,
+  PlayerProgressSection,
+} from "@/components/PlayerProgress";
 import { Reasons } from "@/components/PlayerTable";
+import { VsUpcomingSection } from "@/components/VsUpcoming";
 import { Card, ErrorBox, Stat } from "@/components/ui";
 import { getPlayerDetail } from "@/lib/insights";
 import { formatPrice } from "@/lib/utils";
@@ -22,7 +27,14 @@ export default async function PlayerDetailPage({
   try {
     const detail = await getPlayerDetail(playerId);
     if (!detail) notFound();
-    const { player, history, upcoming, historyPast } = detail;
+    const {
+      player,
+      history,
+      historyFull,
+      upcoming,
+      historyPast,
+      vsUpcoming,
+    } = detail;
 
     return (
       <div className="space-y-6">
@@ -41,7 +53,8 @@ export default async function PlayerDetailPage({
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
               <span>
-                {player.teamName} · {player.position} · {formatPrice(player.price)}
+                {player.teamName} · {player.position} ·{" "}
+                {formatPrice(player.price)}
               </span>
               <AvailabilityBadge
                 status={player.status}
@@ -53,36 +66,28 @@ export default async function PlayerDetailPage({
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="xPts / GW" value={player.expectedPointsPerGw.toFixed(1)} accent />
+          <Stat
+            label="xPts / GW"
+            value={player.expectedPointsPerGw.toFixed(1)}
+            accent
+          />
           <Stat label="Horizon xPts" value={player.projectedPoints.toFixed(1)} />
-          <Stat label="Start chance" value={`${Math.round(player.startChance * 100)}%`} />
+          <Stat
+            label="Start chance"
+            value={`${Math.round(player.startChance * 100)}%`}
+          />
           <Stat label="xGI / 90" value={player.xgi90.toFixed(2)} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Attacking threat" value={`${player.attackingThreat}/100`} />
-          <Stat label="Next-win chance" value={`${player.nextWinChance}%`} />
-          <Stat
-            label="CS chance"
-            value={
-              player.position === "GKP" || player.position === "DEF"
-                ? `${player.cleanSheetChance}%`
-                : "—"
-            }
-          />
-          <Stat label="Form (secondary)" value={player.form.toFixed(1)} />
-        </div>
+        <VsUpcomingSection clubs={vsUpcoming} />
 
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Total pts" value={String(player.totalPoints)} />
-          <Stat label="Selected by" value={`${player.selectedBy}%`} />
-          <Stat label="Price" value={formatPrice(player.price)} />
-          <Stat label="Minutes" value={String(player.minutes)} />
-        </div>
+        <PlayerProgressSection history={historyFull} />
+
+        <PastSeasonsTable seasons={historyPast} />
 
         <Card
-          title="Why this expected-points score"
-          subtitle="xPts ≈ P(start) × (appearance + goals/assists from xG·xA + CS − conceded + bonus), scaled by fixtures"
+          title="Why this score"
+          subtitle="Expected points from starts, xG/xA, fixtures"
         >
           <Reasons reasons={player.reasons} />
           {player.news && (
@@ -102,8 +107,7 @@ export default async function PlayerDetailPage({
                   className="flex justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
                 >
                   <span>
-                    GW{f.event ?? "?"} · {f.isHome ? "H" : "A"}{" "}
-                    {f.opponentName}
+                    GW{f.event ?? "?"} · {f.isHome ? "H" : "A"} {f.opponentName}
                   </span>
                   <span className="text-zinc-400">FDR {f.difficulty}</span>
                 </li>
@@ -126,7 +130,10 @@ export default async function PlayerDetailPage({
                 </thead>
                 <tbody>
                   {history.map((h) => (
-                    <tr key={`${h.round}-${h.fixture}`} className="border-t border-zinc-800">
+                    <tr
+                      key={`${h.round}-${h.fixture}`}
+                      className="border-t border-zinc-800"
+                    >
                       <td className="px-2 py-1.5">{h.round}</td>
                       <td className="px-2 py-1.5">
                         {h.was_home ? "vs" : "@"} {h.opponentShort}
@@ -157,25 +164,6 @@ export default async function PlayerDetailPage({
             </div>
           </Card>
         </div>
-
-        {historyPast.length > 0 && (
-          <Card title="Previous seasons">
-            <ul className="space-y-2">
-              {historyPast.slice(0, 5).map((season) => (
-                <li
-                  key={season.season_name}
-                  className="flex justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
-                >
-                  <span>{season.season_name}</span>
-                  <span className="text-zinc-400">
-                    {season.total_points} pts · {season.goals_scored}G{" "}
-                    {season.assists}A · {season.minutes}&apos;
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        )}
       </div>
     );
   } catch (error) {

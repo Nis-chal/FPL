@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ClubVsUpcomingSection } from "@/components/ClubVsUpcoming";
 import { FixtureStrip } from "@/components/FixturePill";
 import { PlayerTable } from "@/components/PlayerTable";
 import { Card, ErrorBox } from "@/components/ui";
 import { getClubDetail } from "@/lib/insights";
 
-export const revalidate = 60;
+export const revalidate = 30;
 
 export default async function ClubDetailPage({
   params,
@@ -50,10 +51,16 @@ export default async function ClubDetailPage({
                   <span className="font-mono text-zinc-400">FDR {f.difficulty}</span>
                 </li>
               ))}
+              {detail.upcoming.length === 0 && (
+                <li className="text-sm text-zinc-500">No upcoming fixtures.</li>
+              )}
             </ul>
           </Card>
 
-          <Card title="Recent results" subtitle="Last 7 finished matches">
+          <Card
+            title="Recent results"
+            subtitle="Includes live & provisional scores from FPL"
+          >
             <ul className="space-y-2">
               {detail.recent.map((f) => (
                 <li
@@ -71,12 +78,17 @@ export default async function ClubDetailPage({
                             : "bg-zinc-700 text-zinc-300",
                       ].join(" ")}
                     >
-                      {f.result}
+                      {f.result ?? "–"}
                     </span>
-                    {f.isHome ? "vs" : "@"} {f.opponentName}
+                    GW{f.event ?? "?"} · {f.isHome ? "vs" : "@"} {f.opponentName}
+                    {f.isLive && (
+                      <span className="ml-2 text-[11px] font-semibold text-rose-400">
+                        LIVE {f.minutes}&apos;
+                      </span>
+                    )}
                   </span>
                   <span className="font-mono text-zinc-300">
-                    {f.teamScore}-{f.opponentScore}
+                    {f.teamScore ?? "–"}-{f.opponentScore ?? "–"}
                   </span>
                 </li>
               ))}
@@ -86,6 +98,8 @@ export default async function ClubDetailPage({
             </ul>
           </Card>
         </div>
+
+        <ClubVsUpcomingSection rows={detail.vsUpcoming} />
 
         <Card
           title="Squad by projected points"

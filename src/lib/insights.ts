@@ -1,4 +1,5 @@
 import { getBootstrap, getEntry, getEntryPicks, getFixtures } from "@/lib/fpl-client";
+import { buildVsUpcomingClubs } from "@/lib/opponent-history";
 import { pickCaptain } from "@/lib/ranking";
 import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
@@ -10,6 +11,7 @@ import {
   getNextEvent,
   nextFixturesForTeam,
   recentFixturesForTeam,
+  headToHeadFixtures,
   teamMap,
 } from "@/lib/utils";
 
@@ -67,10 +69,24 @@ export async function getClubDetail(teamId: number, horizon = 5) {
     (p) => p.teamId === teamId,
   );
 
+  const vsUpcoming = upcoming.map((u) => {
+    const meetings = headToHeadFixtures(fixtures, teamId, u.opponentId, teams);
+    return {
+      opponentId: u.opponentId,
+      opponentName: u.opponentName,
+      opponentShort: u.opponentShort,
+      nextEvent: u.event,
+      nextIsHome: u.isHome,
+      nextDifficulty: u.difficulty,
+      meetings,
+    };
+  });
+
   return {
     team,
     upcoming,
     recent,
+    vsUpcoming,
     players: scored,
     horizon,
   };
@@ -90,16 +106,16 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
   if (!player) return null;
 
   const teams = teamMap(bootstrap.teams);
-  const history = [...summary.history]
+  const historyFull = [...summary.history]
     .sort((a, b) => b.round - a.round)
-    .slice(0, 8)
     .map((h) => ({
       ...h,
       opponentShort: teams.get(h.opponent_team)?.short_name ?? "???",
     }));
+  const history = historyFull.slice(0, 8);
 
   // Weight last 3–5 GWs of element-summary xG/xA when available
-  const recent = recentRatesFromHistory(history, 5);
+  const recent = recentRatesFromHistory(historyFull, 5);
   if (recent) {
     const blend = 0.55;
     const xg90 = player.xg90 * (1 - blend) + recent.xg90 * blend;
@@ -140,6 +156,7 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
   return {
     player,
     history,
+    historyFull,
     upcoming: summary.fixtures.slice(0, 7).map((f) => ({
       id: f.id,
       event: f.event,
@@ -151,11 +168,27 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
         teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
       difficulty: f.difficulty,
       finished: f.finished,
+      hasResult: f.finished,
+      isLive: false,
+      minutes: 0,
       teamScore: null,
       opponentScore: null,
       result: null as null,
     })),
-    historyPast: summary.history_past,
+    historyPast: [...summary.history_past].slice(0, 5),
+    vsUpcoming: buildVsUpcomingClubs(
+      summary.fixtures.slice(0, 7).map((f) => ({
+        opponentId: f.is_home ? f.team_a : f.team_h,
+        opponentName:
+          teams.get(f.is_home ? f.team_a : f.team_h)?.name ?? "Unknown",
+        opponentShort:
+          teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
+        event: f.event,
+        isHome: f.is_home,
+        difficulty: f.difficulty,
+      })),
+      historyFull,
+    ),
     horizon,
   };
 }

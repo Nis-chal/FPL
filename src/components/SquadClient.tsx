@@ -18,7 +18,7 @@ import {
 } from "@/lib/pitch";
 import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
-import { buildBestSquad, rankFormations } from "@/lib/squad";
+import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
 import type { ScoredPlayer, TeamRating } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
@@ -52,7 +52,8 @@ export function SquadClient({
   initialHorizon?: number;
 }) {
   const { ready, numericId } = useTeamId();
-  const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const { seasonBasis, setSeasonBasis, includeAccumulated } =
+    useAccumulatedPoints(false);
   const {
     rankBy,
     toggleRank,
@@ -82,26 +83,28 @@ export function SquadClient({
       includeAccumulated,
     );
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
+    return sortByRank(priced, rankBy, seasonBasis);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
 
   const built = useMemo(() => {
-    const squad = buildBestSquad(scored, budget);
+    const squad = buildRecommendedSquad(scored, budget, horizon, rankBy);
     if (!squad.captain || squad.startingXi.length === 0) {
       return squad;
     }
-    const captain = pickCaptain(squad.startingXi, rankBy) ?? squad.captain;
+    const captain =
+      pickCaptain(squad.startingXi, rankBy, seasonBasis) ?? squad.captain;
     const vice =
       pickCaptain(
         squad.startingXi.filter((p) => p.id !== captain.id),
         rankBy,
+        seasonBasis,
       ) ?? squad.viceCaptain;
     return {
       ...squad,
       captain,
       viceCaptain: vice,
     };
-  }, [scored, rankBy, budget]);
+  }, [scored, rankBy, budget, horizon, seasonBasis]);
 
   const formations = useMemo(() => rankFormations(scored), [scored]);
 
@@ -275,8 +278,8 @@ export function SquadClient({
         <AnalysisFilters
           horizon={horizon}
           onHorizonChange={setHorizon}
-          includeAccumulated={includeAccumulated}
-          onAccumulatedChange={setIncludeAccumulated}
+          seasonBasis={seasonBasis}
+          onSeasonBasisChange={setSeasonBasis}
           rankBy={rankBy}
           onToggleRank={toggleRank}
           onReset={resetFilters}
@@ -327,7 +330,9 @@ export function SquadClient({
 
       <Card
         title="Recommended squad (pitch view)"
-        subtitle={`Each card shows overall rating + projected points for the next ${horizon} fixtures (${includeAccumulated ? "form on" : "form off"})`}
+        subtitle={`Each card shows overall rating + projected points for the next ${horizon} fixtures (${
+          seasonBasis === "prior" ? "prior seasons" : "this season"
+        })`}
       >
         <div className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3">
           <div className="text-xs uppercase tracking-wider text-emerald-400">

@@ -5,8 +5,10 @@ import { HorizonFilter } from "@/components/HorizonFilter";
 import {
   PRICE_PRESETS,
   RANK_BY_OPTIONS,
+  SEASON_BASIS_OPTIONS,
   rankByLabel,
 } from "@/lib/ranking";
+import type { SeasonBasis } from "@/lib/season-basis";
 import type { PriceBounds, RankBy } from "@/lib/types";
 import {
   BUDGET,
@@ -15,39 +17,44 @@ import {
   formatPrice,
 } from "@/lib/utils";
 
-function AccumulatedPointsToggle({
+function SeasonBasisControl({
   value,
   onChange,
 }: {
-  value: boolean;
-  onChange: (include: boolean) => void;
+  value: SeasonBasis;
+  onChange: (basis: SeasonBasis) => void;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3">
-      <div>
-        <div className="text-sm font-medium text-zinc-200">Accumulated form</div>
-        <p className="text-xs text-zinc-500">
-          Blend recent points / FPL EP into rankings
-        </p>
+    <section>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        Player rating basis
+      </h3>
+      <p className="mt-1 text-[11px] text-zinc-500">
+        Choose whether ratings use this season only, or blend prior FPL seasons.
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {SEASON_BASIS_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(opt.value)}
+              className={[
+                "rounded-xl border px-3 py-2.5 text-left transition",
+                active
+                  ? "border-emerald-500 bg-emerald-500/15 text-emerald-200"
+                  : "border-zinc-800 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600",
+              ].join(" ")}
+            >
+              <div className="text-sm font-semibold">{opt.label}</div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{opt.hint}</div>
+            </button>
+          );
+        })}
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={value}
-        onClick={() => onChange(!value)}
-        className={[
-          "relative h-7 w-12 shrink-0 rounded-full p-0.5 transition",
-          value ? "bg-emerald-500" : "bg-zinc-700",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "block size-6 rounded-full bg-zinc-950 shadow transition-transform",
-            value ? "translate-x-5" : "translate-x-0",
-          ].join(" ")}
-        />
-      </button>
-    </div>
+    </section>
   );
 }
 
@@ -126,8 +133,8 @@ function SquadBudgetControl({
 function FilterDrawerBody({
   horizon,
   onHorizonChange,
-  includeAccumulated,
-  onAccumulatedChange,
+  seasonBasis,
+  onSeasonBasisChange,
   rankBy,
   onToggleRank,
   priceBounds,
@@ -137,8 +144,8 @@ function FilterDrawerBody({
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
-  includeAccumulated: boolean;
-  onAccumulatedChange: (include: boolean) => void;
+  seasonBasis: SeasonBasis;
+  onSeasonBasisChange: (basis: SeasonBasis) => void;
   rankBy: RankBy[];
   onToggleRank: (mode: RankBy) => void;
   priceBounds: PriceBounds;
@@ -155,6 +162,8 @@ function FilterDrawerBody({
 
   return (
     <div className="flex flex-col gap-6">
+      <SeasonBasisControl value={seasonBasis} onChange={onSeasonBasisChange} />
+
       <section>
         <div className="flex items-baseline justify-between gap-2">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
@@ -236,13 +245,6 @@ function FilterDrawerBody({
       <section>
         <HorizonFilter value={horizon} onChange={onHorizonChange} />
       </section>
-
-      <section className="border-t border-zinc-800 pt-4">
-        <AccumulatedPointsToggle
-          value={includeAccumulated}
-          onChange={onAccumulatedChange}
-        />
-      </section>
     </div>
   );
 }
@@ -250,8 +252,8 @@ function FilterDrawerBody({
 export function AnalysisFilters({
   horizon,
   onHorizonChange,
-  includeAccumulated,
-  onAccumulatedChange,
+  seasonBasis,
+  onSeasonBasisChange,
   rankBy,
   onToggleRank,
   onReset,
@@ -262,8 +264,8 @@ export function AnalysisFilters({
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
-  includeAccumulated: boolean;
-  onAccumulatedChange: (include: boolean) => void;
+  seasonBasis: SeasonBasis;
+  onSeasonBasisChange: (basis: SeasonBasis) => void;
   rankBy: RankBy[];
   onToggleRank: (mode: RankBy) => void;
   onReset?: () => void;
@@ -289,12 +291,15 @@ export function AnalysisFilters({
     };
   }, [open]);
 
-  const summary = `${rankByLabel(rankBy)} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
+  const seasonLabel =
+    seasonBasis === "prior" ? "prior seasons" : "this season";
+  const summary = `${rankByLabel(rankBy)} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
   const showReset =
     !isOverallOnly(rankBy) ||
     priceBounds.minPrice != null ||
     priceBounds.maxPrice != null ||
-    budget !== BUDGET;
+    budget !== BUDGET ||
+    seasonBasis !== "current";
 
   return (
     <>
@@ -351,7 +356,7 @@ export function AnalysisFilters({
                   Analysis filters
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Combine lenses, set budget (max £100m), rebuild the squad
+                  Season basis, lenses, budget (max £100m)
                 </p>
               </div>
               <button
@@ -366,8 +371,8 @@ export function AnalysisFilters({
               <FilterDrawerBody
                 horizon={horizon}
                 onHorizonChange={onHorizonChange}
-                includeAccumulated={includeAccumulated}
-                onAccumulatedChange={onAccumulatedChange}
+                seasonBasis={seasonBasis}
+                onSeasonBasisChange={onSeasonBasisChange}
                 rankBy={rankBy}
                 onToggleRank={onToggleRank}
                 priceBounds={priceBounds}

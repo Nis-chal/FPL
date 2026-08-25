@@ -52,7 +52,8 @@ export async function getBootstrap(): Promise<BootstrapStatic> {
 
 export async function getFixtures(): Promise<FplFixture[]> {
   const bootstrap = await getBootstrap();
-  const ttl = bootstrapTtl(bootstrap);
+  // Prefer short TTL while a GW is open so provisional / live scores refresh.
+  const ttl = isCurrentGwActive(bootstrap) ? LIVE_TTL : IDLE_TTL;
   return withCache("fixtures", ttl, () => fplFetch<FplFixture[]>("/fixtures/"));
 }
 

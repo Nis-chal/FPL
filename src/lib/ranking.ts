@@ -1,10 +1,22 @@
 import type { FormationRank, PriceBounds, RankBy, ScoredPlayer } from "@/lib/types";
+import {
+  currentSeasonScore,
+  priorSeasonScore,
+  type SeasonBasis,
+} from "@/lib/season-basis";
+
+export type { SeasonBasis };
 
 export const RANK_BY_OPTIONS: Array<{ value: RankBy; label: string; hint: string }> = [
   {
     value: "overall",
     label: "Overall",
     hint: "Balanced model score (default)",
+  },
+  {
+    value: "team_rating",
+    label: "Team rating",
+    hint: "Build / rank for best squad grade ≤£100m",
   },
   {
     value: "xpts",
@@ -43,6 +55,23 @@ export const RANK_BY_OPTIONS: Array<{ value: RankBy; label: string; hint: string
   },
 ];
 
+export const SEASON_BASIS_OPTIONS: Array<{
+  value: SeasonBasis;
+  label: string;
+  hint: string;
+}> = [
+  {
+    value: "current",
+    label: "This season",
+    hint: "Rating from this season only — no prior seasons",
+  },
+  {
+    value: "prior",
+    label: "Prior seasons",
+    hint: "Blend previous FPL seasons / form into rating",
+  },
+];
+
 export const PRICE_PRESETS: Array<{
   id: string;
   label: string;
@@ -57,6 +86,7 @@ export const PRICE_PRESETS: Array<{
 
 const ALL_RANK_BY: RankBy[] = [
   "overall",
+  "team_rating",
   "xpts",
   "price",
   "best_start",
@@ -182,21 +212,47 @@ function winCsScore(p: ScoredPlayer): number {
 }
 
 /** Balanced overall score used as the default analysis mode. */
-export function overallScore(p: ScoredPlayer): number {
+export function overallScore(
+  p: ScoredPlayer,
+  seasonBasis: SeasonBasis = "current",
+): number {
+  if (seasonBasis === "prior") return priorSeasonScore(p);
+  return currentSeasonScore(p);
+}
+
+/** Individual contribution toward team rating (used for ranking + squad build). */
+export function playerRatingContribution(
+  p: ScoredPlayer,
+  seasonBasis: SeasonBasis = "current",
+): number {
+  if (seasonBasis === "prior") {
+    return (
+      priorSeasonScore(p) +
+      p.startChance * 10 +
+      Math.max(0, 5 - p.upcomingAvgDifficulty) * 4
+    );
+  }
   return (
-    p.projectedPoints * 0.5 +
-    p.expectedPointsPerGw * 2.2 * p.startChance +
-    p.attackingThreat * 0.06 +
-    p.valueScore * 1.5 +
-    (p.availabilityFactor < 0.5 ? -8 : 0)
+    p.expectedPointsPerGw * 12 +
+    p.startChance * 22 +
+    p.attackingThreat * 0.16 +
+    p.nextWinChance * 0.12 +
+    Math.max(0, 5 - p.upcomingAvgDifficulty) * 8 +
+    (p.availabilityFactor < 0.5 ? -15 : 0)
   );
 }
 
 /** Raw metric for one lens (higher = better). */
-function metricScore(p: ScoredPlayer, mode: RankBy): number {
+function metricScore(
+  p: ScoredPlayer,
+  mode: RankBy,
+  seasonBasis: SeasonBasis,
+): number {
   switch (mode) {
     case "overall":
-      return overallScore(p);
+      return overallScore(p, seasonBasis);
+    case "team_rating":
+      return playerRatingContribution(p, seasonBasis);
     case "best_start":
       return p.startChance * 100;
     case "xgi90":
@@ -210,7 +266,7 @@ function metricScore(p: ScoredPlayer, mode: RankBy): number {
     case "next_5":
       return p.expectedPointsPerGw * 10 + p.projectedPoints;
     default:
-      return overallScore(p);
+      return overallScore(p, seasonBasis);
   }
 }
 
@@ -219,6 +275,7 @@ export function combinedRankScore(
   p: ScoredPlayer,
   rankBy: RankBy | RankBy[],
   norms: Map<RankBy, { min: number; max: number }>,
+  seasonBasis: SeasonBasis = "current",
 ): number {
   const modes = normalizeRankBy(rankBy).filter(
     (m) => m !== "next_game" && m !== "next_5",
@@ -227,7 +284,7 @@ export function combinedRankScore(
 
   let sum = 0;
   for (const mode of active) {
-    const raw = metricScore(p, mode);
+    const raw = metricScore(p, mode, seasonBasis);
     const n = norms.get(mode);
     if (!n || n.max <= n.min) {
       sum += raw;
@@ -241,13 +298,14 @@ export function combinedRankScore(
 function buildNorms(
   players: ScoredPlayer[],
   modes: RankBy[],
+  seasonBasis: SeasonBasis,
 ): Map<RankBy, { min: number; max: number }> {
   const norms = new Map<RankBy, { min: number; max: number }>();
   for (const mode of modes) {
     let min = Infinity;
     let max = -Infinity;
     for (const p of players) {
-      const v = metricScore(p, mode);
+      const v = metricScore(p, mode, seasonBasis);
       if (v < min) min = v;
       if (v > max) max = v;
     }
@@ -261,15 +319,17 @@ function buildNorms(
 export function sortByRank(
   players: ScoredPlayer[],
   rankBy: RankBy | RankBy[],
+  seasonBasis: SeasonBasis = "current",
 ): ScoredPlayer[] {
   const modes = normalizeRankBy(rankBy);
   const scoreModes = modes.filter((m) => m !== "next_game" && m !== "next_5");
   const active = scoreModes.length > 0 ? scoreModes : (["overall"] as RankBy[]);
-  const norms = buildNorms(players, active);
+  const norms = buildNorms(players, active, seasonBasis);
 
   return [...players].sort((a, b) => {
     const diff =
-      combinedRankScore(b, active, norms) - combinedRankScore(a, active, norms);
+      combinedRankScore(b, active, norms, seasonBasis) -
+      combinedRankScore(a, active, norms, seasonBasis);
     if (Math.abs(diff) > 1e-9) return diff;
     return b.projectedPoints - a.projectedPoints;
   });
@@ -279,11 +339,16 @@ export function sortByRank(
 export function pickCaptain(
   players: ScoredPlayer[],
   rankBy: RankBy | RankBy[],
+  seasonBasis: SeasonBasis = "current",
 ): ScoredPlayer | undefined {
   const pool = players.filter(
     (p) => p.startChance >= 0.5 && p.availabilityFactor >= 0.5,
   );
-  const ranked = sortByRank(pool.length > 0 ? pool : players, rankBy);
+  const ranked = sortByRank(
+    pool.length > 0 ? pool : players,
+    rankBy,
+    seasonBasis,
+  );
   return ranked[0];
 }
 

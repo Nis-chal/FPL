@@ -92,6 +92,30 @@ export function availabilityFactor(element: FplElement): number {
   return Math.max(0.2, chance / 100);
 }
 
+/**
+ * FPL keeps `finished: false` for hours after kickoff; scores land under
+ * `finished_provisional` (and during live play via started + scores).
+ */
+export function fixtureHasResult(f: Pick<
+  FplFixture,
+  | "finished"
+  | "finished_provisional"
+  | "started"
+  | "team_h_score"
+  | "team_a_score"
+>): boolean {
+  if (f.finished || f.finished_provisional) return true;
+  return f.team_h_score !== null && f.team_a_score !== null;
+}
+
+export function fixtureIsLive(f: Pick<
+  FplFixture,
+  "finished" | "finished_provisional" | "started" | "minutes"
+>): boolean {
+  if (f.finished || f.finished_provisional) return false;
+  return f.started === true;
+}
+
 export function toFixtureViews(
   fixtures: FplFixture[],
   teamId: number,
@@ -106,8 +130,10 @@ export function toFixtureViews(
       const difficulty = isHome ? f.team_h_difficulty : f.team_a_difficulty;
       const teamScore = isHome ? f.team_h_score : f.team_a_score;
       const opponentScore = isHome ? f.team_a_score : f.team_h_score;
+      const hasResult = fixtureHasResult(f);
+      const isLive = fixtureIsLive(f);
       let result: FixtureView["result"] = null;
-      if (f.finished && teamScore !== null && opponentScore !== null) {
+      if (hasResult && teamScore !== null && opponentScore !== null) {
         if (teamScore > opponentScore) result = "W";
         else if (teamScore < opponentScore) result = "L";
         else result = "D";
@@ -122,6 +148,9 @@ export function toFixtureViews(
         opponentShort: opponent?.short_name ?? "???",
         difficulty,
         finished: f.finished,
+        hasResult,
+        isLive,
+        minutes: f.minutes ?? 0,
         teamScore,
         opponentScore,
         result,
@@ -141,7 +170,7 @@ export function nextFixturesForTeam(
   limit = 7,
 ): FixtureView[] {
   return toFixtureViews(fixtures, teamId, teams)
-    .filter((f) => !f.finished)
+    .filter((f) => !f.hasResult && !f.isLive)
     .slice(0, limit);
 }
 
@@ -152,8 +181,24 @@ export function recentFixturesForTeam(
   limit = 7,
 ): FixtureView[] {
   return toFixtureViews(fixtures, teamId, teams)
-    .filter((f) => f.finished)
+    .filter((f) => f.hasResult || f.isLive)
     .slice(-limit)
+    .reverse();
+}
+
+/** Past meetings this season between two clubs (most recent first). */
+export function headToHeadFixtures(
+  fixtures: FplFixture[],
+  teamId: number,
+  opponentId: number,
+  teams: Map<number, FplTeam>,
+): FixtureView[] {
+  return toFixtureViews(fixtures, teamId, teams)
+    .filter(
+      (f) =>
+        f.opponentId === opponentId && (f.hasResult || f.isLive),
+    )
+    .slice()
     .reverse();
 }
 

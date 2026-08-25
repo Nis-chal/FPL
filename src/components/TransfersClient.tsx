@@ -29,7 +29,8 @@ export function TransfersClient({
   initialHorizon?: number;
 }) {
   const { teamId, ready, numericId } = useTeamId();
-  const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const { seasonBasis, setSeasonBasis, includeAccumulated } =
+    useAccumulatedPoints(false);
   const {
     rankBy,
     toggleRank,
@@ -51,8 +52,8 @@ export function TransfersClient({
   const targets = useMemo(() => {
     const scored = applyHorizon(allPlayers, horizon, includeAccumulated);
     const priced = filterByPrice(scored, priceBounds);
-    return bestInboundTargets(sortByRank(priced, rankBy), 20);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
+    return bestInboundTargets(sortByRank(priced, rankBy, seasonBasis), 20);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
 
   useEffect(() => {
     if (!ready || !numericId) {
@@ -97,8 +98,8 @@ export function TransfersClient({
         <AnalysisFilters
           horizon={horizon}
           onHorizonChange={setHorizon}
-          includeAccumulated={includeAccumulated}
-          onAccumulatedChange={setIncludeAccumulated}
+          seasonBasis={seasonBasis}
+          onSeasonBasisChange={setSeasonBasis}
           rankBy={rankBy}
           onToggleRank={toggleRank}
           onReset={resetFilters}

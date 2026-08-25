@@ -149,13 +149,36 @@ export interface ElementFixture {
 export interface ElementSummary {
   fixtures: ElementFixture[];
   history: ElementHistory[];
-  history_past: Array<{
-    season_name: string;
-    total_points: number;
-    minutes: number;
-    goals_scored: number;
-    assists: number;
-  }>;
+  history_past: PastSeasonStats[];
+}
+
+/** Prior FPL seasons (players may have moved clubs/leagues before joining FPL). */
+export interface PastSeasonStats {
+  season_name: string;
+  element_code?: number;
+  start_cost?: number;
+  end_cost?: number;
+  total_points: number;
+  minutes: number;
+  goals_scored: number;
+  assists: number;
+  clean_sheets?: number;
+  goals_conceded?: number;
+  own_goals?: number;
+  penalties_saved?: number;
+  penalties_missed?: number;
+  yellow_cards?: number;
+  red_cards?: number;
+  saves?: number;
+  bonus?: number;
+  bps?: number;
+  influence?: string | number;
+  creativity?: string | number;
+  threat?: string | number;
+  ict_index?: string | number;
+  expected_goals?: string | number;
+  expected_assists?: string | number;
+  expected_goal_involvements?: string | number;
 }
 
 export interface EntrySummary {
@@ -232,6 +255,7 @@ export type RankBy =
   | "best_start"
   | "xgi90"
   | "win_cs"
+  | "team_rating"
   | "next_game"
   | "next_5";
 
@@ -259,7 +283,13 @@ export interface FixtureView {
   opponentName: string;
   opponentShort: string;
   difficulty: number;
+  /** Official FPL finished flag (often false until GW closes). */
   finished: boolean;
+  /** True when scores are available (finished, provisional, or live). */
+  hasResult: boolean;
+  /** In-progress match (started, not yet provisional/official). */
+  isLive: boolean;
+  minutes: number;
   teamScore: number | null;
   opponentScore: number | null;
   result: "W" | "D" | "L" | null;
