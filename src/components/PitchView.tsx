@@ -61,6 +61,8 @@ function PitchPlayerCard({
       <ClubKit
         teamCode={player.teamCode}
         teamShort={player.teamShort}
+        position={player.position}
+        preferJersey
         className="h-8 w-8 object-contain sm:h-9 sm:w-9"
       />
       <div className="mt-1 w-full truncate text-[10px] font-bold text-zinc-50 sm:text-[11px]">

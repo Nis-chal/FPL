@@ -78,6 +78,7 @@ export function BestFormationCard({
                 <ClubKit
                   teamCode={p.teamCode}
                   teamShort={p.teamShort}
+                  position={p.position}
                   className="h-5 w-5 object-contain"
                 />
                 <span className="font-semibold text-zinc-100">{p.webName}</span>

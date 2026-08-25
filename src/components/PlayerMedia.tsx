@@ -1,19 +1,41 @@
 "use client";
 
-import { useState } from "react";
-import { clubKitUrl, playerPhotoUrl } from "@/lib/media";
+import { useMemo, useState } from "react";
+import {
+  clubBadgePngUrl,
+  clubBadgeUrl,
+  clubKitUrl,
+  clubKitUrlLarge,
+  playerPhotoCandidates,
+} from "@/lib/media";
+import type { Position } from "@/lib/types";
 
 export function PlayerPhoto({
   photo,
   alt,
   className = "h-10 w-8 object-cover",
+  size = "list",
 }: {
   photo: string;
   alt: string;
   className?: string;
+  /** Detail pages prefer higher-res; lists use the same fallback chain. */
+  size?: "list" | "detail";
 }) {
-  const [failed, setFailed] = useState(false);
-  if (!photo || failed) {
+  const candidates = useMemo(() => {
+    const all = playerPhotoCandidates(photo);
+    // Detail: start at 250; list: start at 110 (skip huge files in tables).
+    if (size === "list" && all.length > 1) {
+      return all.slice(1);
+    }
+    return all;
+  }, [photo, size]);
+
+  const [index, setIndex] = useState(0);
+  const exhausted = index >= candidates.length;
+  const src = exhausted ? null : candidates[index];
+
+  if (!src) {
     return (
       <div
         className={[
@@ -26,14 +48,17 @@ export function PlayerPhoto({
       </div>
     );
   }
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={playerPhotoUrl(photo)}
+      key={src}
+      src={src}
       alt={alt}
       className={className}
       loading="lazy"
-      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      onError={() => setIndex((i) => i + 1)}
     />
   );
 }
@@ -42,13 +67,35 @@ export function ClubKit({
   teamCode,
   teamShort,
   className = "h-8 w-8 object-contain",
+  position,
+  preferJersey = false,
 }: {
   teamCode: number;
   teamShort: string;
   className?: string;
+  position?: Position;
+  /** When true, try jersey art before club crest. */
+  preferJersey?: boolean;
 }) {
-  const [failed, setFailed] = useState(false);
-  if (!teamCode || failed) {
+  const goalkeeper = position === "GKP";
+  const candidates = useMemo(() => {
+    const badge = [
+      clubBadgeUrl(teamCode),
+      clubBadgePngUrl(teamCode, 70),
+    ];
+    const jersey = [
+      clubKitUrlLarge(teamCode, { goalkeeper }),
+      clubKitUrl(teamCode, { goalkeeper, size: 110 }),
+      clubKitUrl(teamCode, { goalkeeper, size: 66 }),
+    ];
+    return preferJersey ? [...jersey, ...badge] : [...badge, ...jersey];
+  }, [teamCode, goalkeeper, preferJersey]);
+
+  const [index, setIndex] = useState(0);
+  const exhausted = !teamCode || index >= candidates.length;
+  const src = exhausted ? null : candidates[index];
+
+  if (!src) {
     return (
       <div
         className={[
@@ -60,14 +107,17 @@ export function ClubKit({
       </div>
     );
   }
+
   return (
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={clubKitUrl(teamCode)}
-      alt={`${teamShort} kit`}
+      key={src}
+      src={src}
+      alt={`${teamShort} ${preferJersey ? "kit" : "badge"}`}
       className={className}
       loading="lazy"
-      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      onError={() => setIndex((i) => i + 1)}
     />
   );
 }

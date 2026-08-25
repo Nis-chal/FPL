@@ -43,6 +43,7 @@ export default async function PlayerDetailPage({
           <PlayerPhoto
             photo={player.photo}
             alt={player.fullName}
+            size="detail"
             className="h-28 w-[5.5rem] rounded-xl object-cover ring-1 ring-zinc-700"
           />
           <div>

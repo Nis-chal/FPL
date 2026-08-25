@@ -263,6 +263,7 @@ export function TransferPlayerChip({
       <ClubKit
         teamCode={player.teamCode}
         teamShort={player.teamShort}
+        position={player.position}
         className="h-5 w-5 object-contain"
       />
       <span
