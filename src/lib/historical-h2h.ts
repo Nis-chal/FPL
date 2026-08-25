@@ -133,11 +133,10 @@ async function getSeasonPlayerByCode(
 }
 
 function playerGwPath(season: string, player: SeasonPlayer): string {
-  const folder = `${player.firstName}_${player.secondName}_${player.id}`.replace(
-    / /g,
-    "_",
-  );
-  return `${RAW_BASE}/${season}/players/${encodeURI(folder)}/gw.csv`;
+  // vaastav folders keep spaces inside first/second name, e.g.
+  // "João Pedro_Junqueira de Jesus_129" — do not underscore-replace.
+  const folder = `${player.firstName}_${player.secondName}_${player.id}`;
+  return `${RAW_BASE}/${season}/players/${encodeURIComponent(folder)}/gw.csv`;
 }
 
 async function getPlayerSeasonGws(
@@ -145,7 +144,7 @@ async function getPlayerSeasonGws(
   player: SeasonPlayer,
 ): Promise<Record<string, string>[]> {
   return withCache(
-    `hist-gw-${season}-${player.id}`,
+    `hist-gw-v2-${season}-${player.id}`,
     ARCHIVE_TTL,
     async () => {
       const text = await fetchText(playerGwPath(season, player));

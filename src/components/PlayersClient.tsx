@@ -6,7 +6,7 @@ import { PlayerTable } from "@/components/PlayerTable";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
 import { filterByPrice, rankByLabel, sortByRank } from "@/lib/ranking";
-import { applyHorizon, topProjected } from "@/lib/scoring";
+import { applyHorizon } from "@/lib/scoring";
 import type { Position, ScoredPlayer } from "@/lib/types";
 import { useState } from "react";
 
@@ -53,8 +53,6 @@ export function PlayersClient({
       );
     });
   }, [ranked, query, position, teamId]);
-
-  const preview = topProjected(filtered, 80, { minStartChance: 0 });
 
   return (
     <div className="space-y-4">
@@ -108,10 +106,10 @@ export function PlayersClient({
         </select>
       </div>
       <p className="text-xs text-zinc-500">
-        {filtered.length} players · {rankByLabel(rankBy)} ·{" "}
+        Showing {filtered.length} players · {rankByLabel(rankBy)} ·{" "}
         {seasonBasis === "prior" ? "prior seasons" : "this season"}
       </p>
-      <PlayerTable players={preview} showThreat />
+      <PlayerTable players={filtered} showThreat />
     </div>
   );
 }
