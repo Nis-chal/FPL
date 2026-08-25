@@ -9,7 +9,10 @@ import type {
 } from "@/lib/types";
 import { getCurrentEvent } from "@/lib/utils";
 
-const FPL_BASE = "https://fantasy.premierleague.com/api";
+/** Official API; optional proxy base via FPL_API_BASE (e.g. a Cloudflare Worker). */
+const FPL_BASE =
+  process.env.FPL_API_BASE?.replace(/\/$/, "") ||
+  "https://fantasy.premierleague.com/api";
 
 const LIVE_TTL = 25 * 1000;
 const ACTIVE_TTL = 75 * 1000;
@@ -17,21 +20,61 @@ const IDLE_TTL = 4 * 60 * 1000;
 const SUMMARY_TTL = 5 * 60 * 1000;
 const ENTRY_TTL = 5 * 60 * 1000;
 
-async function fplFetch<T>(path: string): Promise<T> {
-  const res = await fetch(`${FPL_BASE}${path}`, {
-    headers: {
-      "User-Agent": "fpl-assistant/1.0",
-      Accept: "application/json",
-    },
-    // Bootstrap exceeds Next.js 2MB data cache; we use module TTL cache instead.
-    cache: "no-store",
-  });
+/** FPL edge often 403s non-browser clients; mimic the official site. */
+const FPL_HEADERS: HeadersInit = {
+  "User-Agent":
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  Accept: "application/json, text/plain, */*",
+  "Accept-Language": "en-GB,en;q=0.9",
+  Referer: "https://fantasy.premierleague.com/",
+  Origin: "https://fantasy.premierleague.com",
+};
 
-  if (!res.ok) {
-    throw new Error(`FPL API ${path} failed: ${res.status} ${res.statusText}`);
+const MAX_ATTEMPTS = 3;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fplFetch<T>(path: string): Promise<T> {
+  const url = `${FPL_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: FPL_HEADERS,
+        // Bootstrap exceeds Next.js 2MB data cache; we use module TTL cache instead.
+        cache: "no-store",
+      });
+
+      if (res.ok) {
+        return (await res.json()) as T;
+      }
+
+      lastError = new Error(
+        `FPL API ${path} failed: ${res.status} ${res.statusText}`,
+      );
+
+      // Transient edge blocks / rate limits — brief backoff then retry.
+      const retryable = res.status === 403 || res.status === 429 || res.status >= 500;
+      if (retryable && attempt < MAX_ATTEMPTS) {
+        await sleep(300 * attempt);
+        continue;
+      }
+      break;
+    } catch (error) {
+      lastError =
+        error instanceof Error ? error : new Error("FPL API request failed");
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(300 * attempt);
+        continue;
+      }
+      break;
+    }
   }
 
-  return res.json() as Promise<T>;
+  throw lastError ?? new Error(`FPL API ${path} failed`);
 }
 
 function isCurrentGwActive(bootstrap: BootstrapStatic): boolean {

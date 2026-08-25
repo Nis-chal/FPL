@@ -21,6 +21,13 @@ Suggestions maximise **expected points (xPts)**. Toggle **accumulated points** o
 
 Unofficial public Fantasy Premier League API (`fantasy.premierleague.com/api/...`), fetched server-side with caching. Not affiliated with the Premier League or FPL.
 
+If the API returns **403 Forbidden** (common on some networks / cloud hosts), set an optional proxy base:
+
+```bash
+# .env.local — URL that forwards to fantasy.premierleague.com/api
+FPL_API_BASE=https://your-proxy.example/api
+```
+
 ## Run locally
 
 ```bash

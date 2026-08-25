@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { ClubKit, PlayerPhoto } from "@/components/PlayerMedia";
+import { PlayerLink } from "@/components/PlayerDrawer";
 import type { ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import { FixtureStrip } from "@/components/FixturePill";
@@ -70,12 +70,9 @@ export function PlayerRow({
             className="h-9 w-7 shrink-0 rounded object-cover"
           />
           <div>
-            <Link
-              href={`/players/${player.id}`}
-              className="font-semibold text-zinc-100 hover:text-emerald-400"
-            >
+            <PlayerLink playerId={player.id}>
               {player.webName}
-            </Link>
+            </PlayerLink>
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
               <span>
                 {player.teamShort} · {player.position}

@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
+import { PlayerLink } from "@/components/PlayerDrawer";
 import { TeamIdForm } from "@/components/TeamIdForm";
 import {
   PlayerTable,
@@ -39,6 +39,8 @@ export function TransfersClient({
     setHorizon,
     budget,
     setBudget,
+    chip,
+    setChip,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -52,8 +54,8 @@ export function TransfersClient({
   const targets = useMemo(() => {
     const scored = applyHorizon(allPlayers, horizon, includeAccumulated);
     const priced = filterByPrice(scored, priceBounds);
-    return bestInboundTargets(sortByRank(priced, rankBy, seasonBasis), 20);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
+    return bestInboundTargets(sortByRank(priced, rankBy, seasonBasis, chip), 20);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   useEffect(() => {
     if (!ready || !numericId) {
@@ -107,6 +109,8 @@ export function TransfersClient({
           onPriceBoundsChange={setPriceBounds}
           budget={budget}
           onBudgetChange={setBudget}
+          chip={chip}
+          onChipChange={setChip}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -136,13 +140,13 @@ export function TransfersClient({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-200">
-                    <Link href={`/players/${t.out.id}`}>
+                    <PlayerLink playerId={t.out.id}>
                       <TransferPlayerChip player={t.out} tone="out" />
-                    </Link>
+                    </PlayerLink>
                     <span className="text-zinc-500">→</span>
-                    <Link href={`/players/${t.in.id}`}>
+                    <PlayerLink playerId={t.in.id}>
                       <TransferPlayerChip player={t.in} tone="in" />
-                    </Link>
+                    </PlayerLink>
                     <span className="text-xs text-zinc-500">
                       {t.out.position} · {t.out.teamShort} → {t.in.teamShort}
                     </span>

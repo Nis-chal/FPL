@@ -1,5 +1,10 @@
 import type { FormationRank, PriceBounds, RankBy, ScoredPlayer } from "@/lib/types";
 import {
+  chipPlayerScore,
+  pickChipCaptain,
+  type ChipMode,
+} from "@/lib/chips";
+import {
   currentSeasonScore,
   priorSeasonScore,
   type SeasonBasis,
@@ -320,7 +325,16 @@ export function sortByRank(
   players: ScoredPlayer[],
   rankBy: RankBy | RankBy[],
   seasonBasis: SeasonBasis = "current",
+  chip: ChipMode = "none",
 ): ScoredPlayer[] {
+  if (chip !== "none") {
+    return [...players].sort((a, b) => {
+      const diff = chipPlayerScore(b, chip) - chipPlayerScore(a, chip);
+      if (Math.abs(diff) > 1e-9) return diff;
+      return b.projectedPoints - a.projectedPoints;
+    });
+  }
+
   const modes = normalizeRankBy(rankBy);
   const scoreModes = modes.filter((m) => m !== "next_game" && m !== "next_5");
   const active = scoreModes.length > 0 ? scoreModes : (["overall"] as RankBy[]);
@@ -340,7 +354,11 @@ export function pickCaptain(
   players: ScoredPlayer[],
   rankBy: RankBy | RankBy[],
   seasonBasis: SeasonBasis = "current",
+  chip: ChipMode = "none",
 ): ScoredPlayer | undefined {
+  const chipCap = pickChipCaptain(players, chip);
+  if (chipCap) return chipCap;
+
   const pool = players.filter(
     (p) => p.startChance >= 0.5 && p.availabilityFactor >= 0.5,
   );
@@ -348,6 +366,7 @@ export function pickCaptain(
     pool.length > 0 ? pool : players,
     rankBy,
     seasonBasis,
+    chip,
   );
   return ranked[0];
 }

@@ -3,6 +3,11 @@
 import { useEffect, useId, useState } from "react";
 import { HorizonFilter } from "@/components/HorizonFilter";
 import {
+  CHIP_OPTIONS,
+  chipLabel,
+  type ChipMode,
+} from "@/lib/chips";
+import {
   PRICE_PRESETS,
   RANK_BY_OPTIONS,
   SEASON_BASIS_OPTIONS,
@@ -16,6 +21,50 @@ import {
   BUDGET_PRESETS,
   formatPrice,
 } from "@/lib/utils";
+
+function ChipModeControl({
+  value,
+  onChange,
+}: {
+  value: ChipMode;
+  onChange: (chip: ChipMode) => void;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Chip lens
+        </h3>
+        <span className="text-[11px] text-zinc-500">Exclusive</span>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">
+        Rebuild rankings / squad for Triple Captain, Bench Boost, or Free Hit.
+      </p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {CHIP_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onChange(opt.value)}
+              className={[
+                "rounded-xl border px-3 py-2.5 text-left transition",
+                active
+                  ? "border-emerald-500 bg-emerald-500/15 text-emerald-200"
+                  : "border-zinc-800 bg-zinc-950/80 text-zinc-300 hover:border-zinc-600",
+              ].join(" ")}
+            >
+              <div className="text-sm font-semibold">{opt.label}</div>
+              <div className="mt-0.5 text-[11px] text-zinc-500">{opt.hint}</div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 function SeasonBasisControl({
   value,
@@ -130,6 +179,41 @@ function SquadBudgetControl({
   );
 }
 
+/** Compact budget presets for squad / home pages (outside the filter drawer). */
+export function SquadBudgetChips({
+  budget,
+  onChange,
+}: {
+  budget: number;
+  onChange: (budget: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        Budget
+      </span>
+      {BUDGET_PRESETS.map((preset) => (
+        <button
+          key={preset}
+          type="button"
+          onClick={() => onChange(preset)}
+          className={[
+            "rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
+            budget === preset
+              ? "border-emerald-500 bg-emerald-500 text-zinc-950"
+              : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
+          ].join(" ")}
+        >
+          £{(preset / 10).toFixed(0)}m
+        </button>
+      ))}
+      <span className="text-xs font-bold text-emerald-400">
+        {formatPrice(budget)}
+      </span>
+    </div>
+  );
+}
+
 function FilterDrawerBody({
   horizon,
   onHorizonChange,
@@ -141,6 +225,8 @@ function FilterDrawerBody({
   onPriceBoundsChange,
   budget,
   onBudgetChange,
+  chip,
+  onChipChange,
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
@@ -152,6 +238,8 @@ function FilterDrawerBody({
   onPriceBoundsChange: (bounds: PriceBounds) => void;
   budget: number;
   onBudgetChange: (budget: number) => void;
+  chip: ChipMode;
+  onChipChange: (chip: ChipMode) => void;
 }) {
   const activePreset =
     PRICE_PRESETS.find(
@@ -163,6 +251,8 @@ function FilterDrawerBody({
   return (
     <div className="flex flex-col gap-6">
       <SeasonBasisControl value={seasonBasis} onChange={onSeasonBasisChange} />
+
+      <ChipModeControl value={chip} onChange={onChipChange} />
 
       <section>
         <div className="flex items-baseline justify-between gap-2">
@@ -207,8 +297,8 @@ function FilterDrawerBody({
           })}
         </div>
         <p className="mt-2 text-[11px] text-zinc-600">
-          Selected lenses are averaged into one ranking. Next game / Next 5 also
-          set the fixture horizon.
+          Selected lenses are averaged into one ranking when no chip is active.
+          Next game / Next 5 also set the fixture horizon.
         </p>
       </section>
 
@@ -261,6 +351,8 @@ export function AnalysisFilters({
   onPriceBoundsChange,
   budget,
   onBudgetChange,
+  chip,
+  onChipChange,
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
@@ -273,6 +365,8 @@ export function AnalysisFilters({
   onPriceBoundsChange: (bounds: PriceBounds) => void;
   budget: number;
   onBudgetChange: (budget: number) => void;
+  chip: ChipMode;
+  onChipChange: (chip: ChipMode) => void;
 }) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -293,13 +387,15 @@ export function AnalysisFilters({
 
   const seasonLabel =
     seasonBasis === "prior" ? "prior seasons" : "this season";
-  const summary = `${rankByLabel(rankBy)} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
+  const chipBit = chip !== "none" ? ` · ${chipLabel(chip)}` : "";
+  const summary = `${rankByLabel(rankBy)}${chipBit} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
   const showReset =
     !isOverallOnly(rankBy) ||
     priceBounds.minPrice != null ||
     priceBounds.maxPrice != null ||
     budget !== BUDGET ||
-    seasonBasis !== "current";
+    seasonBasis !== "current" ||
+    chip !== "none";
 
   return (
     <>
@@ -318,9 +414,11 @@ export function AnalysisFilters({
             <path d="M3 5h14a1 1 0 0 0 0-2H3a1 1 0 1 0 0 2Zm2 6h10a1 1 0 0 0 0-2H5a1 1 0 0 0 0 2Zm3 6h4a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2Z" />
           </svg>
           Filters
-          {rankBy.length > 1 && (
+          {(rankBy.length > 1 || chip !== "none") && (
             <span className="rounded-full bg-emerald-500/20 px-1.5 text-[10px] font-bold text-emerald-300">
-              {rankBy.length}
+              {chip !== "none"
+                ? CHIP_OPTIONS.find((c) => c.value === chip)?.short
+                : rankBy.length}
             </span>
           )}
         </button>
@@ -356,7 +454,7 @@ export function AnalysisFilters({
                   Analysis filters
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Season basis, lenses, budget (max £100m)
+                  Chips, lenses, budget (max £100m)
                 </p>
               </div>
               <button
@@ -379,6 +477,8 @@ export function AnalysisFilters({
                 onPriceBoundsChange={onPriceBoundsChange}
                 budget={budget}
                 onBudgetChange={onBudgetChange}
+                chip={chip}
+                onChipChange={onChipChange}
               />
             </div>
           </aside>

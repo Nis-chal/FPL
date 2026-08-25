@@ -5,9 +5,15 @@ import type {
   RankBy,
   ScoredPlayer,
 } from "@/lib/types";
+import { chipPlayerScore, type ChipMode } from "@/lib/chips";
 import { playerRatingContribution } from "@/lib/ranking";
 import { rateTeam } from "@/lib/team-rating";
 import { BUDGET, SQUAD_LIMITS } from "@/lib/utils";
+
+function buildScore(p: ScoredPlayer, chip: ChipMode): number {
+  if (chip === "none") return p.projectedPoints;
+  return chipPlayerScore(p, chip);
+}
 
 export const FORMATIONS: Array<{
   name: string;
@@ -236,11 +242,13 @@ function pickBestXi(squad: ScoredPlayer[]): {
 export function buildBestSquad(
   scored: ScoredPlayer[],
   budgetTenths: number = BUDGET,
+  chip: ChipMode = "none",
 ): BestSquad {
   const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
+  const minAvail = chip === "bench_boost" || chip === "free_hit" ? 0.4 : 0.35;
   const candidates = scored
-    .filter((p) => p.minutes > 0 || p.form > 0)
-    .filter((p) => p.availabilityFactor >= 0.35);
+    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4)
+    .filter((p) => p.availabilityFactor >= minAvail);
 
   const squad: ScoredPlayer[] = [];
   let remaining = budget;
@@ -251,10 +259,8 @@ export function buildBestSquad(
     const pool = candidates
       .filter((p) => p.position === pos)
       .sort((a, b) => {
-        // Prefer projection, then value
-        if (b.projectedPoints !== a.projectedPoints) {
-          return b.projectedPoints - a.projectedPoints;
-        }
+        const diff = buildScore(b, chip) - buildScore(a, chip);
+        if (Math.abs(diff) > 1e-9) return diff;
         return b.valueScore - a.valueScore;
       });
 
@@ -277,15 +283,15 @@ export function buildBestSquad(
     }
   }
 
-  // Upgrade pass: try to replace lower-projected players with better ones using leftover bank
+  // Upgrade pass under chip / projection score
   const upgrades = [...candidates].sort(
-    (a, b) => b.projectedPoints - a.projectedPoints,
+    (a, b) => buildScore(b, chip) - buildScore(a, chip),
   );
   for (const candidate of upgrades) {
     if (squad.some((p) => p.id === candidate.id)) continue;
     const samePos = squad
       .filter((p) => p.position === candidate.position)
-      .sort((a, b) => a.projectedPoints - b.projectedPoints);
+      .sort((a, b) => buildScore(a, chip) - buildScore(b, chip));
     for (const weak of samePos) {
       const afterRemove = squad.filter((p) => p.id !== weak.id);
       const bank = remaining + weak.price;
@@ -293,7 +299,7 @@ export function buildBestSquad(
         afterRemove.filter((p) => p.teamId === candidate.teamId).length < 3;
       if (!clubOk) continue;
       if (candidate.price > bank) continue;
-      if (candidate.projectedPoints <= weak.projectedPoints + 0.15) continue;
+      if (buildScore(candidate, chip) <= buildScore(weak, chip) + 0.15) continue;
       const idx = squad.findIndex((p) => p.id === weak.id);
       squad[idx] = candidate;
       remaining = bank - candidate.price;
@@ -303,7 +309,7 @@ export function buildBestSquad(
 
   const { startingXi, bench, formation, projectedPoints } = pickBestXi(squad);
   const orderedXi = [...startingXi].sort(
-    (a, b) => b.projectedPoints - a.projectedPoints,
+    (a, b) => buildScore(b, chip) - buildScore(a, chip),
   );
   const captain = orderedXi[0] ?? squad[0];
   const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
@@ -326,10 +332,22 @@ export function buildBestSquad(
     };
   }
 
+  const xiOrFifteen =
+    chip === "bench_boost"
+      ? squad.reduce((s, p) => s + p.projectedPoints, 0)
+      : projectedPoints;
+  // Headline: captain doubles normally; Triple Captain triples; BB uses full 15.
+  const captainExtra =
+    chip === "bench_boost"
+      ? 0
+      : chip === "triple_captain"
+        ? captain.projectedPoints * 2
+        : captain.projectedPoints;
+
   return {
     squad: [...squad].sort(
       (a, b) =>
-        a.positionId - b.positionId || b.projectedPoints - a.projectedPoints,
+        a.positionId - b.positionId || buildScore(b, chip) - buildScore(a, chip),
     ),
     startingXi,
     bench,
@@ -337,9 +355,7 @@ export function buildBestSquad(
     viceCaptain,
     formation,
     totalCost: budget - remaining,
-    projectedPoints: Number(
-      (projectedPoints + captain.projectedPoints).toFixed(2),
-    ),
+    projectedPoints: Number((xiOrFifteen + captainExtra).toFixed(2)),
     bank: remaining,
   };
 }
@@ -565,16 +581,17 @@ export function buildBestSquadByRating(
   );
 }
 
-/** Choose points or rating optimiser from active analyze filters. */
+/** Choose points or rating optimiser from active analyze filters + chip lens. */
 export function buildRecommendedSquad(
   scored: ScoredPlayer[],
   budgetTenths: number,
   horizon: number,
   rankBy: RankBy | RankBy[],
+  chip: ChipMode = "none",
 ): BestSquad {
   const modes = Array.isArray(rankBy) ? rankBy : [rankBy];
-  if (modes.includes("team_rating")) {
+  if (modes.includes("team_rating") && chip === "none") {
     return buildBestSquadByRating(scored, budgetTenths, horizon);
   }
-  return buildBestSquad(scored, budgetTenths);
+  return buildBestSquad(scored, budgetTenths, chip);
 }

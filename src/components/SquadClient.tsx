@@ -1,9 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnalysisFilters } from "@/components/AnalysisFilters";
+import {
+  AnalysisFilters,
+  SquadBudgetChips,
+} from "@/components/AnalysisFilters";
 import { BestFormationCard } from "@/components/BestFormationCard";
 import { PitchView } from "@/components/PitchView";
+import { PlayerLink } from "@/components/PlayerDrawer";
+import { SquadTransferDrawer } from "@/components/SquadTransferPanel";
 import { TeamIdForm } from "@/components/TeamIdForm";
 import { Reasons } from "@/components/PlayerTable";
 import { TeamRatingCard } from "@/components/TeamRatingCard";
@@ -20,7 +25,8 @@ import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
-import type { ScoredPlayer, TeamRating } from "@/lib/types";
+import { applySquadTransfer, suggestTransfers } from "@/lib/transfers";
+import type { ScoredPlayer, TeamRating, TransferSuggestion } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
 type LineupState = {
@@ -44,6 +50,31 @@ function SyncHorizonPlayers(
   };
 }
 
+function reassignArmbands(
+  startingXi: ScoredPlayer[],
+  captainId: number,
+  viceId: number,
+): { captainId: number; viceId: number } {
+  let nextCaptain = captainId;
+  let nextVice = viceId;
+  if (!startingXi.some((p) => p.id === nextCaptain)) {
+    nextCaptain = [...startingXi].sort(
+      (a, b) => b.projectedPoints - a.projectedPoints,
+    )[0]?.id ?? captainId;
+  }
+  if (
+    !startingXi.some((p) => p.id === nextVice) ||
+    nextVice === nextCaptain
+  ) {
+    nextVice =
+      [...startingXi]
+        .filter((p) => p.id !== nextCaptain)
+        .sort((a, b) => b.projectedPoints - a.projectedPoints)[0]?.id ??
+      nextCaptain;
+  }
+  return { captainId: nextCaptain, viceId: nextVice };
+}
+
 export function SquadClient({
   allPlayers,
   initialHorizon = 5,
@@ -62,6 +93,8 @@ export function SquadClient({
     setHorizon,
     budget,
     setBudget,
+    chip,
+    setChip,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -69,10 +102,16 @@ export function SquadClient({
   const [error, setError] = useState<string | null>(null);
   const [entryName, setEntryName] = useState<string | null>(null);
   const [personalRating, setPersonalRating] = useState<TeamRating | null>(null);
+  const [entryBank, setEntryBank] = useState(0);
+  const [transferHint, setTransferHint] = useState<string | null>(null);
   const [swapHint, setSwapHint] = useState<string | null>(null);
 
   const [modelSelected, setModelSelected] = useState<number | null>(null);
   const [personalSelected, setPersonalSelected] = useState<number | null>(null);
+  const [modelRemovedId, setModelRemovedId] = useState<number | null>(null);
+  const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
+  const [personalRemovedId, setPersonalRemovedId] = useState<number | null>(null);
+  const [personalDrawerOpen, setPersonalDrawerOpen] = useState(false);
   const [modelLineup, setModelLineup] = useState<LineupState | null>(null);
   const [personalLineup, setPersonalLineup] = useState<LineupState | null>(null);
 
@@ -83,28 +122,29 @@ export function SquadClient({
       includeAccumulated,
     );
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy, seasonBasis);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
+    return sortByRank(priced, rankBy, seasonBasis, chip);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   const built = useMemo(() => {
-    const squad = buildRecommendedSquad(scored, budget, horizon, rankBy);
+    const squad = buildRecommendedSquad(scored, budget, horizon, rankBy, chip);
     if (!squad.captain || squad.startingXi.length === 0) {
       return squad;
     }
     const captain =
-      pickCaptain(squad.startingXi, rankBy, seasonBasis) ?? squad.captain;
+      pickCaptain(squad.startingXi, rankBy, seasonBasis, chip) ?? squad.captain;
     const vice =
       pickCaptain(
         squad.startingXi.filter((p) => p.id !== captain.id),
         rankBy,
         seasonBasis,
+        chip === "triple_captain" ? "none" : chip,
       ) ?? squad.viceCaptain;
     return {
       ...squad,
       captain,
       viceCaptain: vice,
     };
-  }, [scored, rankBy, budget, horizon, seasonBasis]);
+  }, [scored, rankBy, budget, horizon, seasonBasis, chip]);
 
   const formations = useMemo(() => rankFormations(scored), [scored]);
 
@@ -121,8 +161,10 @@ export function SquadClient({
       viceId: built.viceCaptain.id,
     });
     setModelSelected(null);
+    setModelRemovedId(null);
+    setModelDrawerOpen(false);
     setSwapHint(
-      `Rebuilt for ${formatPrice(budget)} budget · ${formatPrice(built.bank)} bank`,
+      `Rebuilt for ${formatPrice(budget)} budget · ${formatPrice(built.bank)} bank — × to transfer, or tap pitch ↔ bench to swap`,
     );
   }, [built, budget]);
 
@@ -139,9 +181,19 @@ export function SquadClient({
     viceId: built.viceCaptain.id,
   };
 
+  const modelSquad = useMemo(
+    () => [...activeModel.startingXi, ...activeModel.bench],
+    [activeModel],
+  );
+  const modelTotalCost = useMemo(
+    () => modelSquad.reduce((sum, p) => sum + p.price, 0),
+    [modelSquad],
+  );
+  const modelBank = budget - modelTotalCost;
+
   const modelRating = useMemo(
-    () => rateTeam([...activeModel.startingXi, ...activeModel.bench], activeModel.startingXi, horizon),
-    [activeModel, horizon],
+    () => rateTeam(modelSquad, activeModel.startingXi, horizon),
+    [modelSquad, activeModel.startingXi, horizon],
   );
 
   useEffect(() => {
@@ -149,8 +201,12 @@ export function SquadClient({
       setPersonalLineup(null);
       setEntryName(null);
       setPersonalRating(null);
+      setEntryBank(0);
+      setTransferHint(null);
       setError(null);
       setPersonalSelected(null);
+      setPersonalRemovedId(null);
+      setPersonalDrawerOpen(false);
       return;
     }
 
@@ -163,6 +219,12 @@ export function SquadClient({
         if (cancelled) return;
         setEntryName(data.entry?.name ?? `Team ${numericId}`);
         setPersonalRating(data.teamRating ?? null);
+        setEntryBank(
+          typeof data.bank === "number"
+            ? data.bank
+            : data.picks?.entry_history?.bank ?? 0,
+        );
+        setTransferHint(data.freeTransfersHint ?? null);
         const xi: ScoredPlayer[] = data.currentXi ?? [];
         const bench: ScoredPlayer[] = data.currentBench ?? [];
         const captain =
@@ -181,6 +243,8 @@ export function SquadClient({
           viceId: vice,
         });
         setPersonalSelected(null);
+        setPersonalRemovedId(null);
+        setPersonalDrawerOpen(false);
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message);
@@ -194,6 +258,76 @@ export function SquadClient({
     };
   }, [ready, numericId, horizon, includeAccumulated]);
 
+  const applyTransferToLineup = useCallback(
+    (
+      lineup: LineupState,
+      setLineup: (next: LineupState) => void,
+      outId: number,
+      inPlayer: ScoredPlayer,
+      clearTransfer: () => void,
+    ) => {
+      const result = applySquadTransfer(
+        lineup.startingXi,
+        lineup.bench,
+        outId,
+        inPlayer,
+        budget,
+      );
+      if (!result.ok) {
+        setSwapHint(result.error);
+        return;
+      }
+      const arms = reassignArmbands(
+        result.startingXi,
+        lineup.captainId,
+        lineup.viceId,
+      );
+      setLineup({
+        startingXi: result.startingXi,
+        bench: result.bench,
+        ...arms,
+      });
+      clearTransfer();
+      setSwapHint(
+        `Transferred in ${inPlayer.webName} · ${formatPrice(result.totalCost)} spent · ${formatPrice(result.bank)} bank`,
+      );
+    },
+    [budget],
+  );
+
+  const clearModelSlot = useCallback(() => {
+    setModelRemovedId(null);
+    setModelDrawerOpen(false);
+  }, []);
+
+  const clearPersonalSlot = useCallback(() => {
+    setPersonalRemovedId(null);
+    setPersonalDrawerOpen(false);
+  }, []);
+
+  /** × removes player (empty slot). Tap empty slot to open transfer drawer. */
+  const handleRemovePlayer = useCallback(
+    (
+      id: number,
+      removedId: number | null,
+      setRemovedId: (id: number | null) => void,
+      setDrawerOpen: (open: boolean) => void,
+      setSwapSelected: (id: number | null) => void,
+    ) => {
+      setSwapSelected(null);
+      setDrawerOpen(false);
+      if (removedId === id) {
+        // × on already-removed path shouldn't happen; restore
+        setRemovedId(null);
+        setSwapHint(null);
+        return;
+      }
+      setRemovedId(id);
+      setSwapHint("Player removed — tap the empty slot to open the transfer list.");
+    },
+    [],
+  );
+
   const handleSelect = useCallback(
     (
       which: "model" | "personal",
@@ -202,10 +336,12 @@ export function SquadClient({
       setLineup: (next: LineupState) => void,
       selected: number | null,
       setSelected: (id: number | null) => void,
+      clearTransfer: () => void,
     ) => {
+      clearTransfer();
       if (selected === null) {
         setSelected(id);
-        setSwapHint("Now tap a player on the other line (pitch ↔ bench) to swap.");
+        setSwapHint("Tap a player on the other line (pitch ↔ bench) to swap.");
         return;
       }
       if (selected === id) {
@@ -216,37 +352,20 @@ export function SquadClient({
 
       const result = trySwap(lineup.startingXi, lineup.bench, selected, id);
       if (!result) {
-        setSwapHint(
-          "Invalid swap — resulting XI must stay a legal FPL formation (1 GK, 3–5 DEF, 2–5 MID, 1–3 FWD).",
-        );
-        setSelected(null);
+        setSelected(id);
+        setSwapHint("Tap pitch ↔ bench to swap lines (same line reselects).");
         return;
       }
 
-      let captainId = lineup.captainId;
-      let viceId = lineup.viceId;
-      // If captain moved to bench, reassign to highest projected on pitch
-      if (!result.startingXi.some((p) => p.id === captainId)) {
-        captainId = [...result.startingXi].sort(
-          (a, b) => b.projectedPoints - a.projectedPoints,
-        )[0].id;
-      }
-      if (
-        !result.startingXi.some((p) => p.id === viceId) ||
-        viceId === captainId
-      ) {
-        viceId =
-          [...result.startingXi]
-            .filter((p) => p.id !== captainId)
-            .sort((a, b) => b.projectedPoints - a.projectedPoints)[0]?.id ??
-          captainId;
-      }
-
+      const arms = reassignArmbands(
+        result.startingXi,
+        lineup.captainId,
+        lineup.viceId,
+      );
       setLineup({
         startingXi: result.startingXi,
         bench: result.bench,
-        captainId,
-        viceId,
+        ...arms,
       });
       setSelected(null);
       setSwapHint(`Swapped — formation ${formationFromXi(result.startingXi)}.`);
@@ -272,22 +391,60 @@ export function SquadClient({
     );
   }, [personalLineup, personalRating, horizon]);
 
+  const modelOut = modelRemovedId
+    ? modelSquad.find((p) => p.id === modelRemovedId) ?? null
+    : null;
+  const personalSquad = personalLineup
+    ? [...personalLineup.startingXi, ...personalLineup.bench]
+    : [];
+  const personalOut = personalRemovedId
+    ? personalSquad.find((p) => p.id === personalRemovedId) ?? null
+    : null;
+  const personalTotalCost = personalSquad.reduce((sum, p) => sum + p.price, 0);
+  const personalBank = budget - personalTotalCost;
+
+  const personalSuggestions = useMemo(() => {
+    if (!personalLineup || personalSquad.length === 0) return [];
+    // Prefer real ITB from FPL when available; fall back to residual vs analysis budget.
+    const bankTenths = entryBank > 0 ? entryBank : Math.max(0, personalBank);
+    return suggestTransfers(personalSquad, scored, bankTenths, 5, horizon);
+  }, [personalLineup, personalSquad, scored, entryBank, personalBank, horizon]);
+
+  const applySuggestedTransfer = useCallback(
+    (suggestion: TransferSuggestion) => {
+      if (!personalLineup) return;
+      applyTransferToLineup(
+        personalLineup,
+        setPersonalLineup,
+        suggestion.out.id,
+        suggestion.in,
+        clearPersonalSlot,
+      );
+    },
+    [personalLineup, applyTransferToLineup, clearPersonalSlot],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <AnalysisFilters
-          horizon={horizon}
-          onHorizonChange={setHorizon}
-          seasonBasis={seasonBasis}
-          onSeasonBasisChange={setSeasonBasis}
-          rankBy={rankBy}
-          onToggleRank={toggleRank}
-          onReset={resetFilters}
-          priceBounds={priceBounds}
-          onPriceBoundsChange={setPriceBounds}
-          budget={budget}
-          onBudgetChange={setBudget}
-        />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <AnalysisFilters
+            horizon={horizon}
+            onHorizonChange={setHorizon}
+            seasonBasis={seasonBasis}
+            onSeasonBasisChange={setSeasonBasis}
+            rankBy={rankBy}
+            onToggleRank={toggleRank}
+            onReset={resetFilters}
+            priceBounds={priceBounds}
+            onPriceBoundsChange={setPriceBounds}
+            budget={budget}
+            onBudgetChange={setBudget}
+            chip={chip}
+            onChipChange={setChip}
+          />
+          <SquadBudgetChips budget={budget} onChange={setBudget} />
+        </div>
         <div className="w-full max-w-md">
           <TeamIdForm compact />
         </div>
@@ -309,7 +466,7 @@ export function SquadClient({
         />
         <Stat
           label={`Squad / ${formatPrice(budget)}`}
-          value={`${formatPrice(built.totalCost)} · ${formatPrice(built.bank)} bank`}
+          value={`${formatPrice(modelTotalCost)} · ${formatPrice(modelBank)} bank`}
         />
         <Stat
           label={`XI pts (next ${horizon})`}
@@ -329,10 +486,8 @@ export function SquadClient({
       )}
 
       <Card
-        title="Recommended squad (pitch view)"
-        subtitle={`Each card shows overall rating + projected points for the next ${horizon} fixtures (${
-          seasonBasis === "prior" ? "prior seasons" : "this season"
-        })`}
+        title="Recommended squad (customize)"
+        subtitle={`× removes a player, then tap the empty slot for transfers (price + xPts filters). Pitch ↔ bench to swap. Next ${horizon} · ${formatPrice(budget)}`}
       >
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-xs uppercase tracking-wider text-zinc-500">
@@ -361,6 +516,7 @@ export function SquadClient({
             </span>
           </span>
         </div>
+
         <PitchView
           title="Starting XI"
           startingXi={activeModel.startingXi}
@@ -369,6 +525,25 @@ export function SquadClient({
           viceId={activeModel.viceId}
           horizon={horizon}
           selectedId={modelSelected}
+          removedId={modelRemovedId}
+          onRemove={(id) =>
+            handleRemovePlayer(
+              id,
+              modelRemovedId,
+              setModelRemovedId,
+              setModelDrawerOpen,
+              setModelSelected,
+            )
+          }
+          onFillSlot={() => {
+            if (modelRemovedId != null) {
+              setModelDrawerOpen(true);
+              setSwapHint(
+                "Pick a replacement — filter by price and xPts in the drawer.",
+              );
+            }
+          }}
+          onRestoreSlot={clearModelSlot}
           onSelect={(id) =>
             handleSelect(
               "model",
@@ -377,12 +552,37 @@ export function SquadClient({
               setModelLineup,
               modelSelected,
               setModelSelected,
+              clearModelSlot,
             )
           }
           ratingGrade={modelRating.grade}
           ratingScore={modelRating.score}
         />
       </Card>
+
+      {modelOut && modelDrawerOpen && (
+        <SquadTransferDrawer
+          out={modelOut}
+          squad={modelSquad}
+          pool={scored}
+          budget={budget}
+          onClose={() => {
+            setModelDrawerOpen(false);
+            setSwapHint(
+              "Slot still empty — tap + to open transfers, or ↩ to restore.",
+            );
+          }}
+          onTransferIn={(player) =>
+            applyTransferToLineup(
+              activeModel,
+              setModelLineup,
+              modelOut.id,
+              player,
+              clearModelSlot,
+            )
+          }
+        />
+      )}
 
       {loading && (
         <p className="text-sm text-zinc-400">Loading your current squad…</p>
@@ -391,11 +591,11 @@ export function SquadClient({
 
       {personalLineup && (
         <Card
-          title={`Your team on the pitch${entryName ? ` · ${entryName}` : ""}`}
+          title={`Your FPL squad${entryName ? ` · ${entryName}` : ""}`}
           subtitle={
             personalTotal != null
-              ? `Projected ${personalTotal.toFixed(1)} pts over next ${horizon} GWs — tap to swap with bench`
-              : "Tap pitch ↔ bench to rearrange"
+              ? `Projected ${personalTotal.toFixed(1)} pts · ${formatPrice(personalTotalCost)} / ${formatPrice(budget)} · × removes a player, then tap the empty slot for transfers`
+              : "× remove · tap empty slot for transfer list"
           }
         >
           <PitchView
@@ -406,6 +606,25 @@ export function SquadClient({
             viceId={personalLineup.viceId}
             horizon={horizon}
             selectedId={personalSelected}
+            removedId={personalRemovedId}
+            onRemove={(id) =>
+              handleRemovePlayer(
+                id,
+                personalRemovedId,
+                setPersonalRemovedId,
+                setPersonalDrawerOpen,
+                setPersonalSelected,
+              )
+            }
+            onFillSlot={() => {
+              if (personalRemovedId != null) {
+                setPersonalDrawerOpen(true);
+                setSwapHint(
+                  "Pick a replacement — filter by price and xPts in the drawer.",
+                );
+              }
+            }}
+            onRestoreSlot={clearPersonalSlot}
             onSelect={(id) =>
               handleSelect(
                 "personal",
@@ -414,12 +633,104 @@ export function SquadClient({
                 setPersonalLineup,
                 personalSelected,
                 setPersonalSelected,
+                clearPersonalSlot,
               )
             }
             ratingGrade={livePersonalRating?.grade}
             ratingScore={livePersonalRating?.score}
           />
         </Card>
+      )}
+
+      {personalLineup && (
+        <Card
+          title="Suggested transfers"
+          subtitle={
+            transferHint ||
+            `Top 5 for your squad · next ${horizon} · bank ${formatPrice(entryBank > 0 ? entryBank : Math.max(0, personalBank))}`
+          }
+        >
+          {personalSuggestions.length === 0 ? (
+            <p className="text-sm text-zinc-500">
+              No strong upgrades found within bank and club limits for this
+              horizon.
+            </p>
+          ) : (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {personalSuggestions.map((t) => (
+                <div
+                  key={`${t.out.id}-${t.in.id}`}
+                  className="flex min-w-[11.5rem] max-w-[13rem] shrink-0 flex-col gap-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-2.5"
+                >
+                  <div className="flex items-center gap-1 text-xs">
+                    <PlayerLink
+                      playerId={t.out.id}
+                      className="truncate font-semibold text-rose-300"
+                    >
+                      {t.out.webName}
+                    </PlayerLink>
+                    <span className="text-zinc-500">→</span>
+                    <PlayerLink
+                      playerId={t.in.id}
+                      className="truncate font-semibold text-emerald-400"
+                    >
+                      {t.in.webName}
+                    </PlayerLink>
+                  </div>
+                  <div className="text-[10px] text-zinc-500">
+                    {t.out.position} · {t.out.teamShort}→{t.in.teamShort}
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm font-bold text-emerald-400">
+                        {t.netProjectedGain >= 0 ? "+" : ""}
+                        {t.netProjectedGain.toFixed(1)}
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        {t.costDelta === 0
+                          ? "even"
+                          : t.costDelta > 0
+                            ? formatPrice(t.costDelta)
+                            : `+${formatPrice(Math.abs(t.costDelta))}`}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => applySuggestedTransfer(t)}
+                      className="rounded-lg border border-emerald-500/50 bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-300 hover:bg-emerald-500/25"
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      )}
+
+      {personalOut && personalDrawerOpen && personalLineup && (
+        <SquadTransferDrawer
+          out={personalOut}
+          squad={personalSquad}
+          pool={scored}
+          budget={budget}
+          onClose={() => {
+            setPersonalDrawerOpen(false);
+            setSwapHint(
+              "Slot still empty — tap + to open transfers, or ↩ to restore.",
+            );
+          }}
+          onTransferIn={(player) =>
+            applyTransferToLineup(
+              personalLineup,
+              setPersonalLineup,
+              personalOut.id,
+              player,
+              clearPersonalSlot,
+            )
+          }
+        />
       )}
     </div>
   );

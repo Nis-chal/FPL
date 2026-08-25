@@ -1,5 +1,7 @@
-import Link from "next/link";
+"use client";
+
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
+import { PlayerLink } from "@/components/PlayerDrawer";
 import { Card } from "@/components/ui";
 
 export type NewsItem = {
@@ -15,16 +17,14 @@ function formatNewsDate(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString("en-GB", {
+  return d.toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
-    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
 }
 
-/** Single latest-news panel for a player or list of club squad news. */
 export function LatestNewsCard({
   items,
   title = "Latest news",
@@ -35,6 +35,7 @@ export function LatestNewsCard({
   emptyHint?: string;
 }) {
   const withNews = items.filter((i) => i.news?.trim());
+
   if (withNews.length === 0) {
     return (
       <Card title={title} subtitle="From the official FPL feed">
@@ -60,12 +61,9 @@ export function LatestNewsCard({
           >
             <div className="flex flex-wrap items-center gap-2">
               {item.playerId != null && item.playerName && (
-                <Link
-                  href={`/players/${item.playerId}`}
-                  className="text-sm font-semibold text-zinc-100 hover:text-emerald-400"
-                >
+                <PlayerLink playerId={item.playerId}>
                   {item.playerName}
-                </Link>
+                </PlayerLink>
               )}
               {item.status && (
                 <AvailabilityBadge

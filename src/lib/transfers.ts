@@ -133,3 +133,104 @@ export function bestInboundTargets(
     })
     .slice(0, limit);
 }
+
+/** Remaining bank for a 15 after selling `out` (or null = full squad bank). */
+export function transferSpendLimit(
+  squad: ScoredPlayer[],
+  budgetTenths: number,
+  out?: ScoredPlayer | null,
+): number {
+  const spent = squad.reduce((sum, p) => sum + p.price, 0);
+  const bank = budgetTenths - spent;
+  return bank + (out?.price ?? 0);
+}
+
+/**
+ * Same-position transfer-ins that fit bank + club cap (max 3).
+ * Sorted by projected points / appeal.
+ */
+export function listTransferIns(
+  out: ScoredPlayer,
+  squad: ScoredPlayer[],
+  allPlayers: ScoredPlayer[],
+  budgetTenths: number,
+  limit = 36,
+  query = "",
+): ScoredPlayer[] {
+  const squadIds = new Set(squad.map((p) => p.id));
+  const maxSpend = transferSpendLimit(squad, budgetTenths, out);
+  const q = query.trim().toLowerCase();
+
+  return allPlayers
+    .filter((p) => !squadIds.has(p.id))
+    .filter((p) => p.position === out.position)
+    .filter((p) => p.price <= maxSpend)
+    .filter((p) => clubCount(squad, p.teamId, out.id) < 3)
+    .filter((p) => p.availabilityFactor >= 0.25)
+    .filter(
+      (p) =>
+        !q ||
+        p.webName.toLowerCase().includes(q) ||
+        p.fullName.toLowerCase().includes(q) ||
+        p.teamShort.toLowerCase().includes(q),
+    )
+    .sort((a, b) => {
+      const byAppeal = appeal(b) - appeal(a);
+      if (byAppeal !== 0) return byAppeal;
+      return b.projectedPoints - a.projectedPoints;
+    })
+    .slice(0, limit);
+}
+
+export type ApplyTransferResult =
+  | {
+      ok: true;
+      startingXi: ScoredPlayer[];
+      bench: ScoredPlayer[];
+      totalCost: number;
+      bank: number;
+    }
+  | { ok: false; error: string };
+
+/** Replace `outId` with `inPlayer` in XI or bench; enforce budget + club rules. */
+export function applySquadTransfer(
+  startingXi: ScoredPlayer[],
+  bench: ScoredPlayer[],
+  outId: number,
+  inPlayer: ScoredPlayer,
+  budgetTenths: number,
+): ApplyTransferResult {
+  const squad = [...startingXi, ...bench];
+  const out = squad.find((p) => p.id === outId);
+  if (!out) return { ok: false, error: "Player not in squad." };
+  if (inPlayer.position !== out.position) {
+    return { ok: false, error: "Transfer must be same position." };
+  }
+  if (squad.some((p) => p.id === inPlayer.id)) {
+    return { ok: false, error: "Player already in squad." };
+  }
+  if (clubCount(squad, inPlayer.teamId, out.id) >= 3) {
+    return { ok: false, error: "Max 3 players from one club." };
+  }
+
+  const maxSpend = transferSpendLimit(squad, budgetTenths, out);
+  if (inPlayer.price > maxSpend) {
+    return {
+      ok: false,
+      error: `Over budget — need ≤ £${(maxSpend / 10).toFixed(1)}m for this slot.`,
+    };
+  }
+
+  const mapList = (list: ScoredPlayer[]) =>
+    list.map((p) => (p.id === outId ? inPlayer : p));
+  const nextXi = mapList(startingXi);
+  const nextBench = mapList(bench);
+  const nextSquad = [...nextXi, ...nextBench];
+  const totalCost = nextSquad.reduce((sum, p) => sum + p.price, 0);
+  const bank = budgetTenths - totalCost;
+  if (bank < 0) {
+    return { ok: false, error: "Transfer would exceed squad budget." };
+  }
+
+  return { ok: true, startingXi: nextXi, bench: nextBench, totalCost, bank };
+}

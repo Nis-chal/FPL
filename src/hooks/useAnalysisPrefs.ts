@@ -2,6 +2,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
+  horizonForChip,
+  parseChipMode,
+  type ChipMode,
+} from "@/lib/chips";
+import {
   horizonForRankBy,
   normalizeRankBy,
   parsePriceBounds,
@@ -17,17 +22,20 @@ const MIN_PRICE_KEY = "fpl-assistant-minPrice";
 const MAX_PRICE_KEY = "fpl-assistant-maxPrice";
 const HORIZON_KEY = "fpl-assistant-horizon";
 const BUDGET_KEY = "fpl-assistant-budget";
+const CHIP_KEY = "fpl-assistant-chip";
 
 export function useAnalysisPrefs(defaults?: {
   rankBy?: RankBy[];
   horizon?: number;
   budget?: number;
+  chip?: ChipMode;
 }) {
   const [rankBy, setRankByState] = useState<RankBy[]>(
     defaults?.rankBy ?? ["overall"],
   );
   const [horizon, setHorizonState] = useState(defaults?.horizon ?? 5);
   const [budget, setBudgetState] = useState(defaults?.budget ?? BUDGET);
+  const [chip, setChipState] = useState<ChipMode>(defaults?.chip ?? "none");
   const [priceBounds, setPriceBoundsState] = useState<PriceBounds>({
     minPrice: null,
     maxPrice: null,
@@ -42,11 +50,20 @@ export function useAnalysisPrefs(defaults?: {
     );
     setRankByState(nextRank);
 
+    const nextChip = parseChipMode(
+      params.get("chip") ?? window.localStorage.getItem(CHIP_KEY),
+      defaults?.chip ?? "none",
+    );
+    setChipState(nextChip);
+
+    const chipHorizon = horizonForChip(nextChip);
     const implied = horizonForRankBy(nextRank);
     const storedHorizon = Number(
       params.get("horizon") ?? window.localStorage.getItem(HORIZON_KEY),
     );
-    if (implied != null) {
+    if (chipHorizon != null) {
+      setHorizonState(chipHorizon);
+    } else if (implied != null) {
       setHorizonState(implied);
     } else if (
       Number.isFinite(storedHorizon) &&
@@ -81,6 +98,7 @@ export function useAnalysisPrefs(defaults?: {
       horizon?: number;
       priceBounds?: PriceBounds;
       budget?: number;
+      chip?: ChipMode;
     }) => {
       const url = new URL(window.location.href);
       if (next.rankBy !== undefined) {
@@ -96,6 +114,15 @@ export function useAnalysisPrefs(defaults?: {
         const b = clampBudget(next.budget);
         url.searchParams.set("budget", String(b));
         window.localStorage.setItem(BUDGET_KEY, String(b));
+      }
+      if (next.chip !== undefined) {
+        if (next.chip === "none") {
+          url.searchParams.delete("chip");
+          window.localStorage.removeItem(CHIP_KEY);
+        } else {
+          url.searchParams.set("chip", next.chip);
+          window.localStorage.setItem(CHIP_KEY, next.chip);
+        }
       }
       if (next.priceBounds !== undefined) {
         const { minPrice, maxPrice } = next.priceBounds;
@@ -151,6 +178,20 @@ export function useAnalysisPrefs(defaults?: {
     [syncUrl],
   );
 
+  const setChip = useCallback(
+    (value: ChipMode) => {
+      setChipState(value);
+      const chipHorizon = horizonForChip(value);
+      if (chipHorizon != null) {
+        setHorizonState(chipHorizon);
+        syncUrl({ chip: value, horizon: chipHorizon });
+      } else {
+        syncUrl({ chip: value });
+      }
+    },
+    [syncUrl],
+  );
+
   const setHorizon = useCallback(
     (value: number) => {
       setHorizonState(value);
@@ -159,7 +200,15 @@ export function useAnalysisPrefs(defaults?: {
         if (value !== 1) next = next.filter((r) => r !== "next_game");
         if (value !== 5) next = next.filter((r) => r !== "next_5");
         if (next.length === 0) next = ["overall"];
-        syncUrl({ horizon: value, rankBy: next });
+        // Leaving Free Hit when user picks a longer horizon
+        setChipState((prevChip) => {
+          if (prevChip === "free_hit" && value !== 1) {
+            syncUrl({ horizon: value, rankBy: next, chip: "none" });
+            return "none";
+          }
+          syncUrl({ horizon: value, rankBy: next });
+          return prevChip;
+        });
         return next;
       });
     },
@@ -188,11 +237,13 @@ export function useAnalysisPrefs(defaults?: {
     setRankByState(["overall"]);
     setHorizonState(defaults?.horizon ?? 5);
     setBudgetState(defaultBudget);
+    setChipState("none");
     setPriceBoundsState({ minPrice: null, maxPrice: null });
     syncUrl({
       rankBy: ["overall"],
       horizon: defaults?.horizon ?? 5,
       budget: defaultBudget,
+      chip: "none",
       priceBounds: { minPrice: null, maxPrice: null },
     });
   }, [defaults?.horizon, defaults?.budget, syncUrl]);
@@ -202,6 +253,8 @@ export function useAnalysisPrefs(defaults?: {
     rankBy,
     setRankBy,
     toggleRank,
+    chip,
+    setChip,
     horizon,
     setHorizon,
     budget,

@@ -5,6 +5,7 @@ import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { PlayerTable } from "@/components/PlayerTable";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
+import { chipLabel } from "@/lib/chips";
 import { filterByPrice, rankByLabel, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import type { Position, ScoredPlayer } from "@/lib/types";
@@ -30,6 +31,8 @@ export function PlayersClient({
     setHorizon,
     budget,
     setBudget,
+    chip,
+    setChip,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -37,8 +40,8 @@ export function PlayersClient({
   const ranked = useMemo(() => {
     const horizonApplied = applyHorizon(players, horizon, includeAccumulated);
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy, seasonBasis);
-  }, [players, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
+    return sortByRank(priced, rankBy, seasonBasis, chip);
+  }, [players, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -68,6 +71,8 @@ export function PlayersClient({
         onPriceBoundsChange={setPriceBounds}
         budget={budget}
         onBudgetChange={setBudget}
+        chip={chip}
+        onChipChange={setChip}
       />
       <div className="flex flex-wrap gap-2">
         <input
@@ -106,7 +111,8 @@ export function PlayersClient({
         </select>
       </div>
       <p className="text-xs text-zinc-500">
-        Showing {filtered.length} players · {rankByLabel(rankBy)} ·{" "}
+        Showing {filtered.length} players · {rankByLabel(rankBy)}
+        {chip !== "none" ? ` · ${chipLabel(chip)}` : ""} ·{" "}
         {seasonBasis === "prior" ? "prior seasons" : "this season"}
       </p>
       <PlayerTable players={filtered} showThreat />

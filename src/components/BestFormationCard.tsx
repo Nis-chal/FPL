@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ClubKit } from "@/components/PlayerMedia";
+import { PlayerLink } from "@/components/PlayerDrawer";
 import type { FormationRank } from "@/lib/types";
 
 export function BestFormationCard({
@@ -70,9 +71,9 @@ export function BestFormationCard({
 
           <div className="mb-4 flex flex-wrap gap-2">
             {best.startingXi.map((p) => (
-              <Link
+              <PlayerLink
                 key={p.id}
-                href={`/players/${p.id}`}
+                playerId={p.id}
                 className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-950/70 px-2 py-1.5 text-xs hover:border-emerald-500/40"
               >
                 <ClubKit
@@ -86,7 +87,7 @@ export function BestFormationCard({
                 <span className="text-emerald-400">
                   {p.projectedPoints.toFixed(1)}
                 </span>
-              </Link>
+              </PlayerLink>
             ))}
           </div>
 

@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ClubKit } from "@/components/PlayerMedia";
+import { PlayerLink } from "@/components/PlayerDrawer";
 
 type LiveFixture = {
   id: number;
@@ -122,9 +122,9 @@ export function LiveGwStrip() {
           </div>
           <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
             {data.topScorers.slice(0, 8).map((p) => (
-              <Link
+              <PlayerLink
                 key={p.id}
-                href={`/players/${p.id}`}
+                playerId={p.id}
                 className="flex min-w-[5.5rem] shrink-0 flex-col items-center rounded-lg border border-zinc-800 bg-zinc-950/60 px-2 py-2 hover:border-emerald-500/40"
               >
                 <ClubKit
@@ -138,7 +138,7 @@ export function LiveGwStrip() {
                 <span className="text-sm font-bold text-emerald-400">
                   {p.points} pts
                 </span>
-              </Link>
+              </PlayerLink>
             ))}
           </div>
         </div>

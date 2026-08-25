@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Nav } from "@/components/Nav";
+import { PlayerDrawerProvider } from "@/components/PlayerDrawer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,12 +30,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        <Nav />
-        <main className="mx-auto max-w-7xl px-4 py-6 md:py-8">{children}</main>
-        <footer className="mx-auto max-w-7xl px-4 pb-10 text-center text-xs text-zinc-600">
-          Unofficial FPL helper using the public Fantasy Premier League API. Not
-          affiliated with the Premier League or FPL.
-        </footer>
+        <PlayerDrawerProvider>
+          <Nav />
+          <main className="mx-auto max-w-7xl px-4 py-6 md:py-8">{children}</main>
+          <footer className="mx-auto max-w-7xl px-4 pb-10 text-center text-xs text-zinc-600">
+            Unofficial FPL helper using the public Fantasy Premier League API. Not
+            affiliated with the Premier League or FPL.
+          </footer>
+        </PlayerDrawerProvider>
       </body>
     </html>
   );

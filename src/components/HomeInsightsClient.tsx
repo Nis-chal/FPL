@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { AnalysisFilters } from "@/components/AnalysisFilters";
+import {
+  AnalysisFilters,
+  SquadBudgetChips,
+} from "@/components/AnalysisFilters";
 import { BestFormationCard } from "@/components/BestFormationCard";
 import { LiveGwStrip } from "@/components/LiveGwStrip";
 import { PlayerTable, Reasons } from "@/components/PlayerTable";
@@ -40,6 +43,8 @@ export function HomeInsightsClient({
     setHorizon,
     budget,
     setBudget,
+    chip,
+    setChip,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -47,12 +52,12 @@ export function HomeInsightsClient({
   const scored = useMemo(() => {
     const horizonApplied = applyHorizon(allPlayers, horizon, includeAccumulated);
     const priced = filterByPrice(horizonApplied, priceBounds);
-    return sortByRank(priced, rankBy, seasonBasis);
-  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis]);
+    return sortByRank(priced, rankBy, seasonBasis, chip);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   const bestSquad = useMemo(
-    () => buildRecommendedSquad(scored, budget, horizon, rankBy),
-    [scored, budget, horizon, rankBy],
+    () => buildRecommendedSquad(scored, budget, horizon, rankBy, chip),
+    [scored, budget, horizon, rankBy, chip],
   );
   const formations = useMemo(() => rankFormations(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
@@ -62,28 +67,33 @@ export function HomeInsightsClient({
   }).slice(0, 12);
 
   const captainPick =
-    pickCaptain(scored, rankBy, seasonBasis) ??
+    pickCaptain(scored, rankBy, seasonBasis, chip) ??
     topScorers[0] ??
     bestSquad.captain;
 
   const filters = (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <AnalysisFilters
-        horizon={horizon}
-        onHorizonChange={setHorizon}
-        seasonBasis={seasonBasis}
-        onSeasonBasisChange={setSeasonBasis}
-        rankBy={rankBy}
-        onToggleRank={toggleRank}
-        onReset={resetFilters}
-        priceBounds={priceBounds}
-        onPriceBoundsChange={setPriceBounds}
-        budget={budget}
-        onBudgetChange={setBudget}
-      />
-      <div className="w-full max-w-md">
-        <TeamIdForm compact />
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <AnalysisFilters
+          horizon={horizon}
+          onHorizonChange={setHorizon}
+          seasonBasis={seasonBasis}
+          onSeasonBasisChange={setSeasonBasis}
+          rankBy={rankBy}
+          onToggleRank={toggleRank}
+          onReset={resetFilters}
+          priceBounds={priceBounds}
+          onPriceBoundsChange={setPriceBounds}
+          budget={budget}
+          onBudgetChange={setBudget}
+          chip={chip}
+          onChipChange={setChip}
+        />
+        <div className="w-full max-w-md">
+          <TeamIdForm compact />
+        </div>
       </div>
+      <SquadBudgetChips budget={budget} onChange={setBudget} />
     </div>
   );
 
