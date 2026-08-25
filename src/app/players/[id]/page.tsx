@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { FixtureStrip } from "@/components/FixturePill";
+import { PlayerPhoto } from "@/components/PlayerMedia";
 import { Reasons } from "@/components/PlayerTable";
 import { Card, ErrorBox, Stat } from "@/components/ui";
 import { getPlayerDetail } from "@/lib/insights";
 import { formatPrice } from "@/lib/utils";
 
-export const revalidate = 300;
+export const revalidate = 60;
 
 export default async function PlayerDetailPage({
   params,
@@ -24,16 +26,30 @@ export default async function PlayerDetailPage({
 
     return (
       <div className="space-y-6">
-        <div>
-          <Link href="/players" className="text-sm text-emerald-400">
-            ← Players
-          </Link>
-          <h1 className="mt-2 text-3xl font-bold text-zinc-50">
-            {player.fullName}
-          </h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            {player.teamName} · {player.position} · {formatPrice(player.price)}
-          </p>
+        <div className="flex flex-wrap items-start gap-4">
+          <PlayerPhoto
+            photo={player.photo}
+            alt={player.fullName}
+            className="h-28 w-[5.5rem] rounded-xl object-cover ring-1 ring-zinc-700"
+          />
+          <div>
+            <Link href="/players" className="text-sm text-emerald-400">
+              ← Players
+            </Link>
+            <h1 className="mt-2 text-3xl font-bold text-zinc-50">
+              {player.fullName}
+            </h1>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-zinc-400">
+              <span>
+                {player.teamName} · {player.position} · {formatPrice(player.price)}
+              </span>
+              <AvailabilityBadge
+                status={player.status}
+                chanceOfPlaying={player.chanceOfPlaying}
+                news={player.news}
+              />
+            </p>
+          </div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

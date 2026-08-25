@@ -4,7 +4,7 @@ import { ErrorBox } from "@/components/ui";
 import { getLeagueInsights } from "@/lib/insights";
 import { formatPrice } from "@/lib/utils";
 
-export const revalidate = 900;
+export const revalidate = 60;
 
 export default async function HomePage() {
   let insights;
@@ -34,9 +34,9 @@ export default async function HomePage() {
           Expected points outlook
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Toggle accumulated points to blend recent form into rankings, or turn
-          it off to rank on underlying expected points only (minutes, xG/xA,
-          fixtures). Add your team ID for personal transfers and a squad rating.
+          Analyze by price, start chance, xPts, xGI/90, win/CS, or next fixtures.
+          Live GW data refreshes while matches are in play. Add your team ID for
+          personal transfers and a squad rating.
         </p>
       </div>
 

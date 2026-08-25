@@ -52,13 +52,19 @@ export function difficultyTone(difficulty: number): "easy" | "medium" | "hard" {
 
 export function availabilityFactor(element: FplElement): number {
   const status = element.status;
-  if (status === "u" || status === "i" || status === "s") return 0.15;
+  if (status === "u" || status === "i" || status === "s") {
+    const chance =
+      element.chance_of_playing_next_round ??
+      element.chance_of_playing_this_round;
+    if (chance === null || chance === undefined) return 0;
+    return Math.max(0, Math.min(0.35, chance / 100));
+  }
   if (status === "d") {
     const chance =
       element.chance_of_playing_next_round ??
       element.chance_of_playing_this_round ??
       50;
-    return Math.max(0.25, chance / 100);
+    return Math.max(0.2, chance / 100);
   }
   const chance = element.chance_of_playing_next_round;
   if (chance === null || chance === undefined) return 1;

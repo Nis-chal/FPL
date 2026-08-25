@@ -9,11 +9,13 @@ import { TeamRatingCard } from "@/components/TeamRatingCard";
 import { Card, ErrorBox, Stat } from "@/components/ui";
 import { useTeamId } from "@/hooks/useTeamId";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
+import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
 import {
   formationFromXi,
   trySwap,
   xiProjectedTotal,
 } from "@/lib/pitch";
+import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
@@ -50,7 +52,14 @@ export function SquadClient({
 }) {
   const { ready, numericId } = useTeamId();
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
-  const [horizon, setHorizon] = useState(initialHorizon);
+  const {
+    rankBy,
+    setRankBy,
+    horizon,
+    setHorizon,
+    priceBounds,
+    setPriceBounds,
+  } = useAnalysisPrefs({ horizon: initialHorizon });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [entryName, setEntryName] = useState<string | null>(null);
@@ -62,12 +71,30 @@ export function SquadClient({
   const [modelLineup, setModelLineup] = useState<LineupState | null>(null);
   const [personalLineup, setPersonalLineup] = useState<LineupState | null>(null);
 
-  const scored = useMemo(
-    () => applyHorizon(allPlayers, horizon, includeAccumulated),
-    [allPlayers, horizon, includeAccumulated],
-  );
+  const scored = useMemo(() => {
+    const horizonApplied = applyHorizon(
+      allPlayers,
+      horizon,
+      includeAccumulated,
+    );
+    const priced = filterByPrice(horizonApplied, priceBounds);
+    return sortByRank(priced, rankBy);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
 
-  const built = useMemo(() => buildBestSquad(scored), [scored]);
+  const built = useMemo(() => {
+    const squad = buildBestSquad(scored);
+    const captain = pickCaptain(squad.startingXi, rankBy) ?? squad.captain;
+    const vice =
+      pickCaptain(
+        squad.startingXi.filter((p) => p.id !== captain.id),
+        rankBy,
+      ) ?? squad.viceCaptain;
+    return {
+      ...squad,
+      captain,
+      viceCaptain: vice,
+    };
+  }, [scored, rankBy]);
 
   // Reset model lineup when horizon / recommendations change
   useEffect(() => {
@@ -235,6 +262,10 @@ export function SquadClient({
           onHorizonChange={setHorizon}
           includeAccumulated={includeAccumulated}
           onAccumulatedChange={setIncludeAccumulated}
+          rankBy={rankBy}
+          onRankByChange={setRankBy}
+          priceBounds={priceBounds}
+          onPriceBoundsChange={setPriceBounds}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />

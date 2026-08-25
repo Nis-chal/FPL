@@ -183,6 +183,8 @@ function scoreOne(
     teamId: el.team,
     teamName: team?.name ?? "Unknown",
     teamShort: team?.short_name ?? "???",
+    teamCode: team?.code ?? 0,
+    photo: el.photo,
     position,
     positionId: el.element_type,
     price: el.now_cost,
@@ -332,4 +334,58 @@ export function topProjected(
     .filter((p) => p.startChance >= minStart)
     .filter((p) => (options?.availableOnly ? p.availabilityFactor >= 0.5 : true))
     .slice(0, limit);
+}
+
+/** Overlay official FPL live minutes/points; confirm start when already played. */
+export function applyLiveOverlay(
+  players: ScoredPlayer[],
+  liveById: Record<number, { minutes: number; total_points: number }>,
+): ScoredPlayer[] {
+  return players.map((p) => {
+    const live = liveById[p.id];
+    if (!live) return p;
+    const liveMinutes = live.minutes ?? 0;
+    const livePoints = live.total_points ?? 0;
+    const confirmedStart =
+      liveMinutes > 0
+        ? Math.max(p.startChance, liveMinutes >= 60 ? 1 : 0.85)
+        : p.startChance;
+    return {
+      ...p,
+      liveMinutes,
+      livePoints,
+      startChance: Number(confirmedStart.toFixed(3)),
+    };
+  });
+}
+
+/**
+ * Recompute per-90 rates from recent element-summary history (last 3–5 GWs).
+ * Used on player detail to tighten projections without inventing new sources.
+ */
+export function recentRatesFromHistory(
+  history: Array<{
+    minutes: number;
+    expected_goals: string | number;
+    expected_assists: string | number;
+  }>,
+  limit = 5,
+): { xg90: number; xa90: number; xgi90: number; sampleMinutes: number } | null {
+  const slice = history.filter((h) => h.minutes > 0).slice(0, limit);
+  if (slice.length === 0) return null;
+  const minutes = slice.reduce((s, h) => s + h.minutes, 0);
+  if (minutes < 30) return null;
+  const nineties = minutes / 90;
+  let xg = 0;
+  let xa = 0;
+  for (const h of slice) {
+    xg += Number(h.expected_goals) || 0;
+    xa += Number(h.expected_assists) || 0;
+  }
+  return {
+    xg90: xg / nineties,
+    xa90: xa / nineties,
+    xgi90: (xg + xa) / nineties,
+    sampleMinutes: minutes,
+  };
 }

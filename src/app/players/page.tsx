@@ -2,7 +2,7 @@ import { PlayersClient } from "@/components/PlayersClient";
 import { ErrorBox } from "@/components/ui";
 import { getLeagueInsights } from "@/lib/insights";
 
-export const revalidate = 900;
+export const revalidate = 60;
 
 export default async function PlayersPage() {
   try {

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { AvailabilityBadge } from "@/components/AvailabilityBadge";
+import { ClubKit } from "@/components/PlayerMedia";
 import type { Position, ScoredPlayer } from "@/lib/types";
 import {
   displayProjected,
@@ -27,6 +29,7 @@ function PitchPlayerCard({
 }) {
   const overall = playerOverall(player);
   const pts = displayProjected(player, { isCaptain });
+  void horizon;
 
   return (
     <button
@@ -47,14 +50,29 @@ function PitchPlayerCard({
           {isCaptain ? "C" : "VC"}
         </span>
       )}
-      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white sm:h-9 sm:w-9 sm:text-xs">
-        {player.teamShort.slice(0, 3)}
+      <div className="absolute bottom-8 right-0.5 z-10">
+        <AvailabilityBadge
+          status={player.status}
+          chanceOfPlaying={player.chanceOfPlaying}
+          news={player.news}
+          compact
+        />
       </div>
+      <ClubKit
+        teamCode={player.teamCode}
+        teamShort={player.teamShort}
+        className="h-8 w-8 object-contain sm:h-9 sm:w-9"
+      />
       <div className="mt-1 w-full truncate text-[10px] font-bold text-zinc-50 sm:text-[11px]">
         {player.webName}
       </div>
       <div className="text-[10px] font-semibold text-emerald-300 sm:text-[11px]">
         {pts.toFixed(1)} xPts
+        {player.livePoints != null && player.livePoints > 0 && (
+          <span className="ml-0.5 text-[9px] text-amber-300">
+            ({player.livePoints})
+          </span>
+        )}
       </div>
       <div className="text-[9px] text-zinc-400">
         {Math.round(player.startChance * 100)}% start ·{" "}

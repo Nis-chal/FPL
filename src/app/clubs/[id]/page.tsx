@@ -5,7 +5,7 @@ import { PlayerTable } from "@/components/PlayerTable";
 import { Card, ErrorBox } from "@/components/ui";
 import { getClubDetail } from "@/lib/insights";
 
-export const revalidate = 900;
+export const revalidate = 60;
 
 export default async function ClubDetailPage({
   params,

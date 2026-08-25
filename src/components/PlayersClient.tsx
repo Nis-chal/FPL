@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { PlayerTable } from "@/components/PlayerTable";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
+import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
+import { filterByPrice, sortByRank } from "@/lib/ranking";
 import { applyHorizon, topProjected } from "@/lib/scoring";
 import type { Position, ScoredPlayer } from "@/lib/types";
+import { useState } from "react";
 
 export function PlayersClient({
   players,
@@ -17,13 +20,21 @@ export function PlayersClient({
   const [query, setQuery] = useState("");
   const [position, setPosition] = useState<Position | "ALL">("ALL");
   const [teamId, setTeamId] = useState<number | "ALL">("ALL");
-  const [horizon, setHorizon] = useState(5);
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const {
+    rankBy,
+    setRankBy,
+    horizon,
+    setHorizon,
+    priceBounds,
+    setPriceBounds,
+  } = useAnalysisPrefs();
 
-  const ranked = useMemo(
-    () => applyHorizon(players, horizon, includeAccumulated),
-    [players, horizon, includeAccumulated],
-  );
+  const ranked = useMemo(() => {
+    const horizonApplied = applyHorizon(players, horizon, includeAccumulated);
+    const priced = filterByPrice(horizonApplied, priceBounds);
+    return sortByRank(priced, rankBy);
+  }, [players, horizon, includeAccumulated, priceBounds, rankBy]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -48,6 +59,10 @@ export function PlayersClient({
         onHorizonChange={setHorizon}
         includeAccumulated={includeAccumulated}
         onAccumulatedChange={setIncludeAccumulated}
+        rankBy={rankBy}
+        onRankByChange={setRankBy}
+        priceBounds={priceBounds}
+        onPriceBoundsChange={setPriceBounds}
       />
       <div className="flex flex-wrap gap-2">
         <input
@@ -86,8 +101,8 @@ export function PlayersClient({
         </select>
       </div>
       <p className="text-xs text-zinc-500">
-        {filtered.length} players · ranked by{" "}
-        {includeAccumulated ? "xPts + accumulated form" : "underlying xPts only"}
+        {filtered.length} players · analyze by {rankBy}
+        {includeAccumulated ? " · form on" : " · form off"}
       </p>
       <PlayerTable players={preview} showThreat />
     </div>

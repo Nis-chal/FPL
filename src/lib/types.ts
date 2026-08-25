@@ -197,6 +197,48 @@ export interface EntryPicks {
   picks: EntryPick[];
 }
 
+/** Live GW stats from `/api/event/{id}/live/`. */
+export interface LiveElementStats {
+  minutes: number;
+  goals_scored: number;
+  assists: number;
+  clean_sheets: number;
+  goals_conceded: number;
+  own_goals: number;
+  penalties_saved: number;
+  penalties_missed: number;
+  yellow_cards: number;
+  red_cards: number;
+  saves: number;
+  bonus: number;
+  bps: number;
+  total_points: number;
+}
+
+export interface LiveElement {
+  id: number;
+  stats: LiveElementStats;
+}
+
+export interface EventLive {
+  elements: LiveElement[];
+}
+
+/** Analyze-by ranking modes for filters. */
+export type RankBy =
+  | "xpts"
+  | "price"
+  | "best_start"
+  | "xgi90"
+  | "win_cs"
+  | "next_game"
+  | "next_5";
+
+export interface PriceBounds {
+  minPrice: number | null;
+  maxPrice: number | null;
+}
+
 export interface FixtureView {
   id: number;
   event: number | null;
@@ -219,6 +261,10 @@ export interface ScoredPlayer {
   teamId: number;
   teamName: string;
   teamShort: string;
+  /** FPL team code for kit assets. */
+  teamCode: number;
+  /** FPL photo filename e.g. "123456.jpg". */
+  photo: string;
   position: Position;
   positionId: number;
   price: number;
@@ -229,6 +275,10 @@ export interface ScoredPlayer {
   status: string;
   news: string;
   chanceOfPlaying: number | null;
+  /** Live GW points so far (when overlay applied). */
+  livePoints?: number | null;
+  /** Live GW minutes so far (when overlay applied). */
+  liveMinutes?: number | null;
   recentAvgPoints: number;
   recentGames: number;
   nextDifficulty: number | null;

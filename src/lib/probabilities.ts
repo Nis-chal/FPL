@@ -78,15 +78,17 @@ export function estimateCleanSheetChance(
 
 /**
  * P(player starts / gets meaningful minutes). Minutes dominate FPL.
+ * Injured / suspended / unavailable are hard-capped unless FPL lists a chance.
  */
 export function estimateStartChance(element: FplElement): number {
   const status = element.status;
   if (status === "u" || status === "i" || status === "s") {
     const chance =
       element.chance_of_playing_next_round ??
-      element.chance_of_playing_this_round ??
-      0;
-    return Math.max(0.05, chance / 100);
+      element.chance_of_playing_this_round;
+    if (chance === null || chance === undefined) return 0;
+    // Hard-cap unavailable players even when FPL lists a residual chance
+    return Math.max(0, Math.min(0.35, chance / 100));
   }
 
   let base = 0.85;
@@ -95,7 +97,7 @@ export function estimateStartChance(element: FplElement): number {
       element.chance_of_playing_next_round ??
       element.chance_of_playing_this_round ??
       50;
-    base = Math.max(0.2, chance / 100);
+    base = Math.max(0.15, chance / 100);
   } else if (
     element.chance_of_playing_next_round !== null &&
     element.chance_of_playing_next_round !== undefined
@@ -105,7 +107,6 @@ export function estimateStartChance(element: FplElement): number {
 
   // Season minutes share (proxy for role)
   const nineties = Math.max(1, element.minutes / 90);
-  // Assume ~1 match per GW; if few minutes relative to season progress, cut starts
   // Soft prior: players with 0 minutes early season keep base from status
   if (element.minutes > 0) {
     const avgMin = Math.min(90, element.minutes / Math.max(1, nineties));
@@ -117,6 +118,10 @@ export function estimateStartChance(element: FplElement): number {
   return Math.max(0.05, Math.min(1, base));
 }
 
+/**
+ * Per-90 rates with an early-season soft prior: when sample size is tiny,
+ * blend toward modest position-agnostic baselines so season totals don't explode.
+ */
 export function per90Rates(element: FplElement): {
   xg90: number;
   xa90: number;
@@ -124,19 +129,33 @@ export function per90Rates(element: FplElement): {
   xgc90: number;
   nineties: number;
 } {
-  const nineties = Math.max(0.5, element.minutes / 90);
+  const rawNineties = element.minutes / 90;
+  const nineties = Math.max(0.5, rawNineties);
   const xg = parseFloatSafe(element.expected_goals);
   const xa = parseFloatSafe(element.expected_assists);
   const xgi =
     parseFloatSafe(element.expected_goal_involvements) || xg + xa;
   const xgc = parseFloatSafe(element.expected_goals_conceded);
-  return {
-    xg90: xg / nineties,
-    xa90: xa / nineties,
-    xgi90: xgi / nineties,
-    xgc90: xgc / nineties,
-    nineties,
-  };
+
+  let xg90 = xg / nineties;
+  let xa90 = xa / nineties;
+  let xgi90 = xgi / nineties;
+  let xgc90 = xgc / nineties;
+
+  // Early season: < 3 full games → shrink rates toward mild priors
+  if (rawNineties < 3) {
+    const confidence = Math.max(0.25, rawNineties / 3);
+    const priorXg = 0.12;
+    const priorXa = 0.1;
+    const priorXgi = 0.22;
+    const priorXgc = 1.1;
+    xg90 = xg90 * confidence + priorXg * (1 - confidence);
+    xa90 = xa90 * confidence + priorXa * (1 - confidence);
+    xgi90 = xgi90 * confidence + priorXgi * (1 - confidence);
+    xgc90 = xgc90 * confidence + priorXgc * (1 - confidence);
+  }
+
+  return { xg90, xa90, xgi90, xgc90, nineties };
 }
 
 /**
@@ -365,6 +384,14 @@ export function projectPointsForHorizon(input: ExpectedPointsInput): {
   let blended = modelHorizon;
   let perGw = modelPerGw;
 
+  // Hard-cap: no meaningful minutes expected → no projected points
+  if (effectiveStart < 0.05) {
+    return {
+      projectedPoints: 0,
+      expectedPointsPerGw: 0,
+    };
+  }
+
   if (includeAccumulated) {
     const formHorizon = recentAvgPoints * (slice.length || horizon) * 0.85;
     blended = modelHorizon * 0.72 + formHorizon * 0.18;
@@ -386,10 +413,11 @@ export function projectPointsForHorizon(input: ExpectedPointsInput): {
   };
 }
 
+/** Horizon 1–7 (1 = next game analyze-by). */
 export function parseHorizon(value: string | null | undefined, fallback = 5): number {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
-  return Math.min(7, Math.max(3, Math.round(n)));
+  return Math.min(7, Math.max(1, Math.round(n)));
 }
 
 export function parseIncludeAccumulated(

@@ -1,6 +1,6 @@
 "use client";
 
-const HORIZONS = [3, 4, 5, 6, 7] as const;
+const HORIZONS = [1, 3, 4, 5, 6, 7] as const;
 
 export function HorizonFilter({
   value,

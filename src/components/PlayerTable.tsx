@@ -1,4 +1,8 @@
+"use client";
+
 import Link from "next/link";
+import { AvailabilityBadge } from "@/components/AvailabilityBadge";
+import { ClubKit, PlayerPhoto } from "@/components/PlayerMedia";
 import type { ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 import { FixtureStrip } from "@/components/FixturePill";
@@ -20,15 +24,37 @@ export function PlayerRow({
         <td className="px-3 py-2 text-xs text-zinc-500">{rank}</td>
       )}
       <td className="px-3 py-2">
-        <Link
-          href={`/players/${player.id}`}
-          className="font-semibold text-zinc-100 hover:text-emerald-400"
-        >
-          {player.webName}
-        </Link>
-        <div className="text-[11px] text-zinc-500">
-          {player.teamShort} · {player.position}
-          {player.isPenTaker ? " · pens" : ""}
+        <div className="flex items-center gap-2">
+          <PlayerPhoto
+            photo={player.photo}
+            alt={player.webName}
+            className="h-9 w-7 shrink-0 rounded object-cover"
+          />
+          <div>
+            <Link
+              href={`/players/${player.id}`}
+              className="font-semibold text-zinc-100 hover:text-emerald-400"
+            >
+              {player.webName}
+            </Link>
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+              <span>
+                {player.teamShort} · {player.position}
+                {player.isPenTaker ? " · pens" : ""}
+              </span>
+              <AvailabilityBadge
+                status={player.status}
+                chanceOfPlaying={player.chanceOfPlaying}
+                news={player.news}
+                compact
+              />
+              {player.livePoints != null && player.livePoints > 0 && (
+                <span className="text-emerald-400">
+                  live {player.livePoints}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </td>
       <td className="px-3 py-2 text-sm text-zinc-300">{formatPrice(player.price)}</td>
@@ -128,5 +154,39 @@ export function Reasons({ reasons }: { reasons: string[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Compact transfer row media + badge helper. */
+export function TransferPlayerChip({
+  player,
+  tone,
+}: {
+  player: ScoredPlayer;
+  tone: "out" | "in";
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <ClubKit
+        teamCode={player.teamCode}
+        teamShort={player.teamShort}
+        className="h-5 w-5 object-contain"
+      />
+      <span
+        className={
+          tone === "out"
+            ? "font-semibold text-rose-300"
+            : "font-semibold text-emerald-400"
+        }
+      >
+        {player.webName}
+      </span>
+      <AvailabilityBadge
+        status={player.status}
+        chanceOfPlaying={player.chanceOfPlaying}
+        news={player.news}
+        compact
+      />
+    </span>
   );
 }

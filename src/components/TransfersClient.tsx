@@ -3,12 +3,19 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
+import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { TeamIdForm } from "@/components/TeamIdForm";
-import { PlayerTable, Reasons } from "@/components/PlayerTable";
+import {
+  PlayerTable,
+  Reasons,
+  TransferPlayerChip,
+} from "@/components/PlayerTable";
 import { TeamRatingCard } from "@/components/TeamRatingCard";
 import { Card, ErrorBox } from "@/components/ui";
 import { useTeamId } from "@/hooks/useTeamId";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
+import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
+import { filterByPrice, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import { bestInboundTargets } from "@/lib/transfers";
 import type { ScoredPlayer, TeamRating, TransferSuggestion } from "@/lib/types";
@@ -23,7 +30,14 @@ export function TransfersClient({
 }) {
   const { teamId, ready, numericId } = useTeamId();
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
-  const [horizon, setHorizon] = useState(initialHorizon);
+  const {
+    rankBy,
+    setRankBy,
+    horizon,
+    setHorizon,
+    priceBounds,
+    setPriceBounds,
+  } = useAnalysisPrefs({ horizon: initialHorizon });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transfers, setTransfers] = useState<TransferSuggestion[] | null>(null);
@@ -33,8 +47,9 @@ export function TransfersClient({
 
   const targets = useMemo(() => {
     const scored = applyHorizon(allPlayers, horizon, includeAccumulated);
-    return bestInboundTargets(scored, 20);
-  }, [allPlayers, horizon, includeAccumulated]);
+    const priced = filterByPrice(scored, priceBounds);
+    return bestInboundTargets(sortByRank(priced, rankBy), 20);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
 
   useEffect(() => {
     if (!ready || !numericId) {
@@ -49,7 +64,9 @@ export function TransfersClient({
     setLoading(true);
     setError(null);
 
-    fetch(`/api/entry/${numericId}?horizon=${horizon}&accumulated=${includeAccumulated ? "1" : "0"}`)
+    fetch(
+      `/api/entry/${numericId}?horizon=${horizon}&accumulated=${includeAccumulated ? "1" : "0"}`,
+    )
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Failed to load team");
@@ -79,6 +96,10 @@ export function TransfersClient({
           onHorizonChange={setHorizon}
           includeAccumulated={includeAccumulated}
           onAccumulatedChange={setIncludeAccumulated}
+          rankBy={rankBy}
+          onRankByChange={setRankBy}
+          priceBounds={priceBounds}
+          onPriceBoundsChange={setPriceBounds}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -90,16 +111,14 @@ export function TransfersClient({
       )}
       {error && <ErrorBox message={error} />}
 
-      {teamRating && (
-        <TeamRatingCard rating={teamRating} />
-      )}
+      {teamRating && <TeamRatingCard rating={teamRating} />}
 
       {transfers && (
         <Card
           title={`Personal transfers${entryName ? ` · ${entryName}` : ""}`}
           subtitle={
             hint ||
-            `Swaps for the next ${horizon} fixtures — ${includeAccumulated ? "xPts plus accumulated form" : "underlying xPts only"}`
+            `Swaps for the next ${horizon} fixtures — analyze by ${rankBy}`
           }
         >
           <div className="space-y-3">
@@ -109,23 +128,22 @@ export function TransfersClient({
                 className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="text-sm text-zinc-200">
-                    <Link
-                      href={`/players/${t.out.id}`}
-                      className="font-semibold text-rose-300 hover:underline"
-                    >
-                      {t.out.webName}
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-200">
+                    <Link href={`/players/${t.out.id}`}>
+                      <TransferPlayerChip player={t.out} tone="out" />
                     </Link>
-                    <span className="mx-2 text-zinc-500">→</span>
-                    <Link
-                      href={`/players/${t.in.id}`}
-                      className="font-semibold text-emerald-400 hover:underline"
-                    >
-                      {t.in.webName}
+                    <span className="text-zinc-500">→</span>
+                    <Link href={`/players/${t.in.id}`}>
+                      <TransferPlayerChip player={t.in} tone="in" />
                     </Link>
-                    <span className="ml-2 text-xs text-zinc-500">
+                    <span className="text-xs text-zinc-500">
                       {t.out.position} · {t.out.teamShort} → {t.in.teamShort}
                     </span>
+                    <AvailabilityBadge
+                      status={t.in.status}
+                      chanceOfPlaying={t.in.chanceOfPlaying}
+                      news={t.in.news}
+                    />
                   </div>
                   <div className="flex flex-wrap gap-3 text-right text-sm">
                     <div>
@@ -182,7 +200,7 @@ export function TransfersClient({
 
       <Card
         title="Best inbound targets"
-        subtitle={`League-wide for next ${horizon} fixtures — ${includeAccumulated ? "including accumulated form" : "accumulated points off"}`}
+        subtitle={`League-wide for next ${horizon} · analyze by ${rankBy}`}
       >
         <PlayerTable players={targets} showThreat />
       </Card>

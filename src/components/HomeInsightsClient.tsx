@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
+import { LiveGwStrip } from "@/components/LiveGwStrip";
 import { PlayerTable, Reasons } from "@/components/PlayerTable";
 import { TeamIdForm } from "@/components/TeamIdForm";
 import { Card, Stat } from "@/components/ui";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
+import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
+import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon, topProjected } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
 import type { FplEvent, ScoredPlayer } from "@/lib/types";
@@ -21,35 +24,72 @@ export function HomeInsightsClient({
   currentEvent: FplEvent | null;
   nextEvent: FplEvent | null;
 }) {
-  const [horizon, setHorizon] = useState(5);
   const { includeAccumulated, setIncludeAccumulated } = useAccumulatedPoints(true);
+  const {
+    rankBy,
+    setRankBy,
+    horizon,
+    setHorizon,
+    priceBounds,
+    setPriceBounds,
+  } = useAnalysisPrefs();
 
-  const scored = useMemo(
-    () => applyHorizon(allPlayers, horizon, includeAccumulated),
-    [allPlayers, horizon, includeAccumulated],
-  );
+  const scored = useMemo(() => {
+    const horizonApplied = applyHorizon(allPlayers, horizon, includeAccumulated);
+    const priced = filterByPrice(horizonApplied, priceBounds);
+    return sortByRank(priced, rankBy);
+  }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy]);
 
   const bestSquad = useMemo(() => buildBestSquad(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
-    minMinutes: 1,
-    availableOnly: true,
-    minStartChance: 0.4,
-  });
+    minMinutes: 0,
+    availableOnly: false,
+    minStartChance: 0,
+  }).slice(0, 12);
+
   const captainPick =
-    [...scored]
-      .filter((p) => p.startChance >= 0.5 && p.availabilityFactor >= 0.5)
-      .sort((a, b) => b.expectedPointsPerGw - a.expectedPointsPerGw)[0] ??
-    topScorers[0] ??
-    bestSquad.captain;
+    pickCaptain(scored, rankBy) ?? topScorers[0] ?? bestSquad.captain;
+
+  if (!captainPick) {
+    return (
+      <>
+        <LiveGwStrip />
+        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <AnalysisFilters
+            horizon={horizon}
+            onHorizonChange={setHorizon}
+            includeAccumulated={includeAccumulated}
+            onAccumulatedChange={setIncludeAccumulated}
+            rankBy={rankBy}
+            onRankByChange={setRankBy}
+            priceBounds={priceBounds}
+            onPriceBoundsChange={setPriceBounds}
+          />
+          <div className="w-full max-w-md">
+            <TeamIdForm compact />
+          </div>
+        </div>
+        <p className="text-sm text-zinc-500">
+          No players match the current price / analyze filters.
+        </p>
+      </>
+    );
+  }
 
   return (
     <>
+      <LiveGwStrip />
+
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <AnalysisFilters
           horizon={horizon}
           onHorizonChange={setHorizon}
           includeAccumulated={includeAccumulated}
           onAccumulatedChange={setIncludeAccumulated}
+          rankBy={rankBy}
+          onRankByChange={setRankBy}
+          priceBounds={priceBounds}
+          onPriceBoundsChange={setPriceBounds}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -71,8 +111,8 @@ export function HomeInsightsClient({
         title="Highest expected points"
         subtitle={
           includeAccumulated
-            ? `Likely starters · next ${horizon} · including accumulated form`
-            : `Likely starters · next ${horizon} · accumulated points off (underlying only)`
+            ? `Analyze by ${rankBy} · next ${horizon} · including accumulated form`
+            : `Analyze by ${rankBy} · next ${horizon} · accumulated points off`
         }
         action={
           <Link
