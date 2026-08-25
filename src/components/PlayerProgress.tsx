@@ -14,9 +14,7 @@ type GwRow = {
 };
 
 function toRows(
-  history: Array<
-    ElementHistory & { opponentShort?: string }
-  >,
+  history: Array<ElementHistory & { opponentShort?: string }>,
 ): GwRow[] {
   return [...history]
     .sort((a, b) => a.round - b.round)
@@ -31,6 +29,16 @@ function toRows(
     }));
 }
 
+function linePath(
+  values: number[],
+  xAt: (i: number) => number,
+  yAt: (v: number) => number,
+): string {
+  return values
+    .map((v, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yAt(v).toFixed(1)}`)
+    .join(" ");
+}
+
 function ProgressChart({ rows }: { rows: GwRow[] }) {
   if (rows.length === 0) {
     return (
@@ -39,32 +47,45 @@ function ProgressChart({ rows }: { rows: GwRow[] }) {
   }
 
   const width = 560;
-  const height = 200;
+  const height = 220;
   const padL = 28;
   const padR = 12;
-  const padT = 16;
+  const padT = 28;
   const padB = 28;
   const innerW = width - padL - padR;
   const innerH = height - padT - padB;
-  const maxPts = Math.max(8, ...rows.map((r) => r.points));
-  const maxGA = Math.max(2, ...rows.map((r) => r.goals + r.assists));
+  const maxY = Math.max(
+    8,
+    ...rows.map((r) => Math.max(r.points, r.goals, r.assists)),
+  );
 
   const xAt = (i: number) =>
     padL + (rows.length <= 1 ? innerW / 2 : (i / (rows.length - 1)) * innerW);
-  const yPts = (v: number) => padT + innerH - (v / maxPts) * innerH;
-  const yGA = (v: number) => padT + innerH - (v / maxGA) * innerH;
+  const yAt = (v: number) => padT + innerH - (v / maxY) * innerH;
 
-  const ptsPath = rows
-    .map((r, i) => `${i === 0 ? "M" : "L"} ${xAt(i).toFixed(1)} ${yPts(r.points).toFixed(1)}`)
-    .join(" ");
+  const ptsPath = linePath(
+    rows.map((r) => r.points),
+    xAt,
+    yAt,
+  );
+  const goalsPath = linePath(
+    rows.map((r) => r.goals),
+    xAt,
+    yAt,
+  );
+  const assistsPath = linePath(
+    rows.map((r) => r.assists),
+    xAt,
+    yAt,
+  );
 
   return (
     <div className="overflow-x-auto">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-48 w-full min-w-[20rem] text-zinc-100"
+        className="h-52 w-full min-w-[20rem] text-zinc-100"
         role="img"
-        aria-label="Points, goals and assists by gameweek"
+        aria-label="Points, goals and assists by gameweek line chart"
       >
         {[0, 0.25, 0.5, 0.75, 1].map((t) => {
           const y = padT + innerH * (1 - t);
@@ -80,6 +101,23 @@ function ProgressChart({ rows }: { rows: GwRow[] }) {
             />
           );
         })}
+
+        <path
+          d={goalsPath}
+          fill="none"
+          stroke="#38bdf8"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+        <path
+          d={assistsPath}
+          fill="none"
+          stroke="#fbbf24"
+          strokeWidth={2}
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
         <path
           d={ptsPath}
           fill="none"
@@ -88,34 +126,12 @@ function ProgressChart({ rows }: { rows: GwRow[] }) {
           strokeLinejoin="round"
           strokeLinecap="round"
         />
+
         {rows.map((r, i) => (
           <g key={r.round}>
-            <circle
-              cx={xAt(i)}
-              cy={yPts(r.points)}
-              r={3.5}
-              fill="#34d399"
-            />
-            {/* Goals */}
-            <rect
-              x={xAt(i) - 6}
-              y={yGA(r.goals)}
-              width={5}
-              height={Math.max(0, padT + innerH - yGA(r.goals))}
-              fill="#38bdf8"
-              opacity={0.85}
-              rx={1}
-            />
-            {/* Assists */}
-            <rect
-              x={xAt(i) + 1}
-              y={yGA(r.assists)}
-              width={5}
-              height={Math.max(0, padT + innerH - yGA(r.assists))}
-              fill="#fbbf24"
-              opacity={0.85}
-              rx={1}
-            />
+            <circle cx={xAt(i)} cy={yAt(r.goals)} r={3} fill="#38bdf8" />
+            <circle cx={xAt(i)} cy={yAt(r.assists)} r={3} fill="#fbbf24" />
+            <circle cx={xAt(i)} cy={yAt(r.points)} r={3.5} fill="#34d399" />
             <text
               x={xAt(i)}
               y={height - 8}
@@ -127,9 +143,21 @@ function ProgressChart({ rows }: { rows: GwRow[] }) {
             </text>
           </g>
         ))}
-        <text x={padL} y={12} className="fill-zinc-500" fontSize={10}>
-          Pts (line) · Goals (blue) · Assists (amber)
-        </text>
+
+        <g fontSize={10}>
+          <circle cx={padL} cy={12} r={3.5} fill="#34d399" />
+          <text x={padL + 8} y={15} className="fill-zinc-400">
+            Pts
+          </text>
+          <circle cx={padL + 48} cy={12} r={3} fill="#38bdf8" />
+          <text x={padL + 56} y={15} className="fill-zinc-400">
+            Goals
+          </text>
+          <circle cx={padL + 108} cy={12} r={3} fill="#fbbf24" />
+          <text x={padL + 116} y={15} className="fill-zinc-400">
+            Assists
+          </text>
+        </g>
       </svg>
     </div>
   );

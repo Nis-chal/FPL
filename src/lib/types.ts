@@ -132,6 +132,12 @@ export interface ElementHistory {
   expected_goal_involvements: string;
   expected_goals_conceded: string;
   value: number;
+  /** FPL defensive / involvement extras (added for DC scoring). */
+  clearances_blocks_interceptions?: number;
+  recoveries?: number;
+  tackles?: number;
+  defensive_contribution?: number;
+  starts?: number;
 }
 
 export interface ElementFixture {
@@ -179,6 +185,11 @@ export interface PastSeasonStats {
   expected_goals?: string | number;
   expected_assists?: string | number;
   expected_goal_involvements?: string | number;
+  clearances_blocks_interceptions?: number;
+  recoveries?: number;
+  tackles?: number;
+  defensive_contribution?: number;
+  starts?: number;
 }
 
 export interface EntrySummary {

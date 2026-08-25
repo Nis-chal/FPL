@@ -4,13 +4,38 @@ import type {
   PastSeasonStats,
 } from "@/lib/types";
 
-export type VsOpponentMeeting = {
+function num(value: string | number | null | undefined): number {
+  if (value === null || value === undefined || value === "") return 0;
+  const n = typeof value === "number" ? value : Number.parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+export type InvolvementStats = {
+  /** FPL Threat — attacking involvement proxy (shots not published). */
+  threat: number;
+  /** FPL Creativity — chance-creation / progressive-pass proxy. */
+  creativity: number;
+  defensiveContribution: number;
+  clearancesBlocksInterceptions: number;
+  tackles: number;
+  recoveries: number;
+};
+
+export type VsOpponentMeeting = InvolvementStats & {
   round: number;
   points: number;
   goals: number;
   assists: number;
   minutes: number;
   wasHome: boolean;
+};
+
+export type PastSeasonSlice = InvolvementStats & {
+  seasonName: string;
+  points: number;
+  goals: number;
+  assists: number;
+  minutes: number;
 };
 
 export type VsUpcomingClub = {
@@ -26,11 +51,70 @@ export type VsUpcomingClub = {
   totalGoals: number;
   totalAssists: number;
   meetings: VsOpponentMeeting[];
+  /** Totals across this-season meetings (0 if none). */
+  involvement: InvolvementStats;
+  /** When no this-season H2H: last up to 5 FPL seasons (overall — FPL has no past H2H). */
+  pastSeasons: PastSeasonSlice[];
 };
 
+function involvementFromHistory(
+  h: Pick<
+    ElementHistory,
+    | "threat"
+    | "creativity"
+    | "defensive_contribution"
+    | "clearances_blocks_interceptions"
+    | "tackles"
+    | "recoveries"
+  >,
+): InvolvementStats {
+  return {
+    threat: num(h.threat),
+    creativity: num(h.creativity),
+    defensiveContribution: h.defensive_contribution ?? 0,
+    clearancesBlocksInterceptions: h.clearances_blocks_interceptions ?? 0,
+    tackles: h.tackles ?? 0,
+    recoveries: h.recoveries ?? 0,
+  };
+}
+
+function involvementFromPast(s: PastSeasonStats): InvolvementStats {
+  return {
+    threat: num(s.threat),
+    creativity: num(s.creativity),
+    defensiveContribution: s.defensive_contribution ?? 0,
+    clearancesBlocksInterceptions: s.clearances_blocks_interceptions ?? 0,
+    tackles: s.tackles ?? 0,
+    recoveries: s.recoveries ?? 0,
+  };
+}
+
+function sumInvolvement(rows: InvolvementStats[]): InvolvementStats {
+  return rows.reduce(
+    (acc, r) => ({
+      threat: acc.threat + r.threat,
+      creativity: acc.creativity + r.creativity,
+      defensiveContribution:
+        acc.defensiveContribution + r.defensiveContribution,
+      clearancesBlocksInterceptions:
+        acc.clearancesBlocksInterceptions + r.clearancesBlocksInterceptions,
+      tackles: acc.tackles + r.tackles,
+      recoveries: acc.recoveries + r.recoveries,
+    }),
+    {
+      threat: 0,
+      creativity: 0,
+      defensiveContribution: 0,
+      clearancesBlocksInterceptions: 0,
+      tackles: 0,
+      recoveries: 0,
+    },
+  );
+}
+
 /**
- * For each upcoming opponent, summarise this-season meetings (points / G / A).
- * FPL element history is current season only.
+ * For each upcoming opponent, summarise this-season meetings.
+ * If none, attach last 5 overall FPL seasons (API has no per-opponent past history).
  */
 export function buildVsUpcomingClubs(
   upcoming: Array<{
@@ -51,9 +135,27 @@ export function buildVsUpcomingClubs(
       | "assists"
       | "minutes"
       | "was_home"
+      | "threat"
+      | "creativity"
+      | "defensive_contribution"
+      | "clearances_blocks_interceptions"
+      | "tackles"
+      | "recoveries"
     >
   >,
+  pastSeasons: PastSeasonStats[] = [],
 ): VsUpcomingClub[] {
+  const pastSlices: PastSeasonSlice[] = [...pastSeasons]
+    .slice(0, 5)
+    .map((s) => ({
+      seasonName: s.season_name,
+      points: s.total_points,
+      goals: s.goals_scored,
+      assists: s.assists,
+      minutes: s.minutes,
+      ...involvementFromPast(s),
+    }));
+
   return upcoming.map((u) => {
     const meetings = history
       .filter((h) => h.opponent_team === u.opponentId)
@@ -65,6 +167,7 @@ export function buildVsUpcomingClubs(
         assists: h.assists,
         minutes: h.minutes,
         wasHome: h.was_home,
+        ...involvementFromHistory(h),
       }));
 
     const totalPoints = meetings.reduce((s, m) => s + m.points, 0);
@@ -85,6 +188,8 @@ export function buildVsUpcomingClubs(
       totalGoals,
       totalAssists,
       meetings,
+      involvement: sumInvolvement(meetings),
+      pastSeasons: games === 0 ? pastSlices : [],
     };
   });
 }

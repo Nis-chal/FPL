@@ -188,6 +188,10 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
         difficulty: f.difficulty,
       })),
       historyFull,
+      [...summary.history_past]
+        .slice()
+        .sort((a, b) => b.season_name.localeCompare(a.season_name))
+        .slice(0, 5),
     ),
     horizon,
   };
