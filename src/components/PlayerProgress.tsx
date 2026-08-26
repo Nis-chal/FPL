@@ -222,24 +222,42 @@ export function PlayerProgressSection({
 
 export function PastSeasonsTable({
   seasons,
+  currentSeason,
 }: {
   seasons: PastSeasonStats[];
+  /** Live 25/26 (or current) season totals — FPL does not put these in history_past. */
+  currentSeason?: PastSeasonStats | null;
 }) {
-  const rows = [...seasons].slice(0, 5);
+  const prior = [...seasons].filter(
+    (s) =>
+      !currentSeason ||
+      s.season_name.replace(/-/g, "/") !==
+        currentSeason.season_name.replace(/-/g, "/"),
+  );
+  const rows = currentSeason
+    ? [currentSeason, ...prior].slice(0, 6)
+    : prior.slice(0, 5);
+
   if (rows.length === 0) {
     return (
-      <Card title="Previous seasons" subtitle="Up to 5 prior FPL seasons">
+      <Card title="Season stats" subtitle="Current + prior FPL seasons">
         <p className="text-sm text-zinc-500">
-          No prior FPL seasons on record for this player.
+          No season totals on record for this player yet.
         </p>
       </Card>
     );
   }
 
+  const currentName = currentSeason?.season_name;
+
   return (
     <Card
-      title="Previous seasons"
-      subtitle="Last 5 FPL seasons (includes seasons after moving clubs / leagues into the Premier League)"
+      title="Season stats"
+      subtitle={
+        currentName
+          ? `${currentName} (current) plus prior FPL seasons`
+          : "Prior FPL seasons"
+      }
     >
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
@@ -252,30 +270,56 @@ export function PastSeasonsTable({
               <th className="px-2 py-1.5">Min</th>
               <th className="px-2 py-1.5">CS</th>
               <th className="px-2 py-1.5">Bonus</th>
+              <th className="px-2 py-1.5">xGI</th>
               <th className="px-2 py-1.5">Price</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => (
-              <tr key={s.season_name} className="border-t border-zinc-800">
-                <td className="px-2 py-2 font-semibold text-zinc-100">
-                  {s.season_name}
-                </td>
-                <td className="px-2 py-2 text-emerald-400">{s.total_points}</td>
-                <td className="px-2 py-2 text-sky-300">{s.goals_scored}</td>
-                <td className="px-2 py-2 text-amber-300">{s.assists}</td>
-                <td className="px-2 py-2 text-zinc-400">{s.minutes}</td>
-                <td className="px-2 py-2 text-zinc-400">
-                  {s.clean_sheets ?? "—"}
-                </td>
-                <td className="px-2 py-2 text-zinc-400">{s.bonus ?? "—"}</td>
-                <td className="px-2 py-2 text-zinc-400">
-                  {s.start_cost != null && s.end_cost != null
-                    ? `£${(s.start_cost / 10).toFixed(1)}→${(s.end_cost / 10).toFixed(1)}m`
-                    : "—"}
-                </td>
-              </tr>
-            ))}
+            {rows.map((s) => {
+              const isCurrent = currentName != null && s.season_name === currentName;
+              const xgi =
+                s.expected_goal_involvements != null
+                  ? Number(s.expected_goal_involvements)
+                  : NaN;
+              return (
+                <tr
+                  key={s.season_name}
+                  className={[
+                    "border-t border-zinc-800",
+                    isCurrent ? "bg-emerald-500/5" : "",
+                  ].join(" ")}
+                >
+                  <td className="px-2 py-2 font-semibold text-zinc-100">
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      {s.season_name}
+                      {isCurrent && (
+                        <span className="rounded-md bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+                          Current
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-2 py-2 text-emerald-400">{s.total_points}</td>
+                  <td className="px-2 py-2 text-sky-300">{s.goals_scored}</td>
+                  <td className="px-2 py-2 text-amber-300">{s.assists}</td>
+                  <td className="px-2 py-2 text-zinc-400">{s.minutes}</td>
+                  <td className="px-2 py-2 text-zinc-400">
+                    {s.clean_sheets ?? "—"}
+                  </td>
+                  <td className="px-2 py-2 text-zinc-400">{s.bonus ?? "—"}</td>
+                  <td className="px-2 py-2 text-zinc-400">
+                    {Number.isFinite(xgi) ? xgi.toFixed(1) : "—"}
+                  </td>
+                  <td className="px-2 py-2 text-zinc-400">
+                    {isCurrent && s.end_cost != null
+                      ? `£${(s.end_cost / 10).toFixed(1)}m`
+                      : s.start_cost != null && s.end_cost != null
+                        ? `£${(s.start_cost / 10).toFixed(1)}→${(s.end_cost / 10).toFixed(1)}m`
+                        : "—"}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

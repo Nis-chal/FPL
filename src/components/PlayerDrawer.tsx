@@ -36,6 +36,8 @@ type PlayerDetailPayload = {
   historyFull: Array<ElementHistory & { opponentShort: string }>;
   upcoming: FixtureView[];
   historyPast: PastSeasonStats[];
+  currentSeason: PastSeasonStats | null;
+  currentSeasonLabel: string;
   vsUpcoming: VsUpcomingClub[];
   horizon: number;
 };
@@ -64,8 +66,16 @@ export function useOptionalPlayerDrawer(): PlayerDrawerContextValue | null {
 }
 
 function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
-  const { player, history, historyFull, upcoming, historyPast, vsUpcoming } =
-    detail;
+  const {
+    player,
+    history,
+    historyFull,
+    upcoming,
+    historyPast,
+    currentSeason,
+    currentSeasonLabel,
+    vsUpcoming,
+  } = detail;
 
   return (
     <div className="space-y-5">
@@ -109,8 +119,35 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
           label="xPts / GW"
           value={player.expectedPointsPerGw.toFixed(1)}
           accent
+          tip={
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                Why this score
+              </div>
+              <p className="text-xs text-zinc-400">
+                Built mainly from {currentSeasonLabel} minutes, form, xG/xA and
+                upcoming fixtures.
+              </p>
+              <Reasons reasons={player.reasons} />
+            </div>
+          }
         />
-        <Stat label="Horizon xPts" value={player.projectedPoints.toFixed(1)} />
+        <Stat
+          label="Horizon xPts"
+          value={player.projectedPoints.toFixed(1)}
+          tip={
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                Why this score
+              </div>
+              <p className="text-xs text-zinc-400">
+                Summed projected points over the active fixture horizon using
+                current-season rates.
+              </p>
+              <Reasons reasons={player.reasons} />
+            </div>
+          }
+        />
         <Stat
           label="Start chance"
           value={`${Math.round(player.startChance * 100)}%`}
@@ -118,18 +155,45 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
         <Stat label="xGI / 90" value={player.xgi90.toFixed(2)} />
       </div>
 
+      {currentSeason && (
+        <Card
+          title={`${currentSeasonLabel} season`}
+          subtitle="Live FPL totals for the current campaign"
+        >
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat label="Total pts" value={String(currentSeason.total_points)} accent />
+            <Stat label="Minutes" value={String(currentSeason.minutes)} />
+            <Stat
+              label="Goals"
+              value={String(currentSeason.goals_scored)}
+            />
+            <Stat label="Assists" value={String(currentSeason.assists)} />
+            <Stat
+              label="Clean sheets"
+              value={String(currentSeason.clean_sheets ?? 0)}
+            />
+            <Stat label="Bonus" value={String(currentSeason.bonus ?? 0)} />
+            <Stat label="Form" value={player.form.toFixed(1)} />
+            <Stat
+              label="xGI (season)"
+              value={
+                currentSeason.expected_goal_involvements != null
+                  ? Number(currentSeason.expected_goal_involvements).toFixed(1)
+                  : "—"
+              }
+            />
+          </div>
+        </Card>
+      )}
+
       <VsUpcomingSection clubs={vsUpcoming} />
 
       <PlayerProgressSection history={historyFull} />
 
-      <PastSeasonsTable seasons={historyPast} />
-
-      <Card
-        title="Why this score"
-        subtitle="Expected points from starts, xG/xA, fixtures"
-      >
-        <Reasons reasons={player.reasons} />
-      </Card>
+      <PastSeasonsTable
+        seasons={historyPast}
+        currentSeason={currentSeason}
+      />
 
       <Card title="Upcoming fixtures">
         <FixtureStrip fixtures={upcoming} />

@@ -45,6 +45,8 @@ export function HomeInsightsClient({
     setBudget,
     chip,
     setChip,
+    formation,
+    setFormation,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -56,8 +58,9 @@ export function HomeInsightsClient({
   }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   const bestSquad = useMemo(
-    () => buildRecommendedSquad(scored, budget, horizon, rankBy, chip),
-    [scored, budget, horizon, rankBy, chip],
+    () =>
+      buildRecommendedSquad(scored, budget, horizon, rankBy, chip, formation),
+    [scored, budget, horizon, rankBy, chip, formation],
   );
   const formations = useMemo(() => rankFormations(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
@@ -88,6 +91,8 @@ export function HomeInsightsClient({
           onBudgetChange={setBudget}
           chip={chip}
           onChipChange={setChip}
+          formation={formation}
+          onFormationChange={setFormation}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />

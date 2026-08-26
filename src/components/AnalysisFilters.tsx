@@ -21,6 +21,11 @@ import {
   BUDGET_PRESETS,
   formatPrice,
 } from "@/lib/utils";
+import {
+  FORMATION_PREFERENCE_OPTIONS,
+  formationPreferenceLabel,
+  type FormationPreference,
+} from "@/lib/squad";
 
 function ChipModeControl({
   value,
@@ -99,6 +104,53 @@ function SeasonBasisControl({
             >
               <div className="text-sm font-semibold">{opt.label}</div>
               <div className="mt-0.5 text-[11px] text-zinc-500">{opt.hint}</div>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function FormationControl({
+  value,
+  onChange,
+}: {
+  value: FormationPreference;
+  onChange: (formation: FormationPreference) => void;
+}) {
+  return (
+    <section>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Formation
+        </h3>
+        <span className="text-sm font-bold text-emerald-400">
+          {formationPreferenceLabel(value)}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-zinc-500">
+        Lock the starting XI shape when building a squad. Auto picks the
+        strongest legal formation.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {FORMATION_PREFERENCE_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              title={opt.hint}
+              onClick={() => onChange(opt.value)}
+              className={[
+                "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
+                active
+                  ? "border-emerald-500 bg-emerald-500 text-zinc-950"
+                  : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
+              ].join(" ")}
+            >
+              {opt.label}
             </button>
           );
         })}
@@ -227,6 +279,8 @@ function FilterDrawerBody({
   onBudgetChange,
   chip,
   onChipChange,
+  formation,
+  onFormationChange,
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
@@ -240,6 +294,8 @@ function FilterDrawerBody({
   onBudgetChange: (budget: number) => void;
   chip: ChipMode;
   onChipChange: (chip: ChipMode) => void;
+  formation: FormationPreference;
+  onFormationChange: (formation: FormationPreference) => void;
 }) {
   const activePreset =
     PRICE_PRESETS.find(
@@ -253,6 +309,8 @@ function FilterDrawerBody({
       <SeasonBasisControl value={seasonBasis} onChange={onSeasonBasisChange} />
 
       <ChipModeControl value={chip} onChange={onChipChange} />
+
+      <FormationControl value={formation} onChange={onFormationChange} />
 
       <section>
         <div className="flex items-baseline justify-between gap-2">
@@ -353,6 +411,8 @@ export function AnalysisFilters({
   onBudgetChange,
   chip,
   onChipChange,
+  formation,
+  onFormationChange,
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
@@ -367,6 +427,8 @@ export function AnalysisFilters({
   onBudgetChange: (budget: number) => void;
   chip: ChipMode;
   onChipChange: (chip: ChipMode) => void;
+  formation: FormationPreference;
+  onFormationChange: (formation: FormationPreference) => void;
 }) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -388,14 +450,17 @@ export function AnalysisFilters({
   const seasonLabel =
     seasonBasis === "prior" ? "prior seasons" : "this season";
   const chipBit = chip !== "none" ? ` · ${chipLabel(chip)}` : "";
-  const summary = `${rankByLabel(rankBy)}${chipBit} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
+  const formationBit =
+    formation !== "auto" ? ` · ${formation}` : " · auto XI";
+  const summary = `${rankByLabel(rankBy)}${chipBit}${formationBit} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
   const showReset =
     !isOverallOnly(rankBy) ||
     priceBounds.minPrice != null ||
     priceBounds.maxPrice != null ||
     budget !== BUDGET ||
     seasonBasis !== "current" ||
-    chip !== "none";
+    chip !== "none" ||
+    formation !== "auto";
 
   return (
     <>
@@ -414,11 +479,13 @@ export function AnalysisFilters({
             <path d="M3 5h14a1 1 0 0 0 0-2H3a1 1 0 1 0 0 2Zm2 6h10a1 1 0 0 0 0-2H5a1 1 0 0 0 0 2Zm3 6h4a1 1 0 0 0 0-2H8a1 1 0 0 0 0 2Z" />
           </svg>
           Filters
-          {(rankBy.length > 1 || chip !== "none") && (
+          {(rankBy.length > 1 || chip !== "none" || formation !== "auto") && (
             <span className="rounded-full bg-emerald-500/20 px-1.5 text-[10px] font-bold text-emerald-300">
               {chip !== "none"
                 ? CHIP_OPTIONS.find((c) => c.value === chip)?.short
-                : rankBy.length}
+                : formation !== "auto"
+                  ? formation
+                  : rankBy.length}
             </span>
           )}
         </button>
@@ -454,7 +521,7 @@ export function AnalysisFilters({
                   Analysis filters
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Chips, lenses, budget (max £100m)
+                  Formation, chips, lenses, budget (max £100m)
                 </p>
               </div>
               <button
@@ -479,6 +546,8 @@ export function AnalysisFilters({
                 onBudgetChange={onBudgetChange}
                 chip={chip}
                 onChipChange={onChipChange}
+                formation={formation}
+                onFormationChange={onFormationChange}
               />
             </div>
           </aside>

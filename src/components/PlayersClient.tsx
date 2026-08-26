@@ -33,6 +33,8 @@ export function PlayersClient({
     setBudget,
     chip,
     setChip,
+    formation,
+    setFormation,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs();
@@ -73,6 +75,8 @@ export function PlayersClient({
         onBudgetChange={setBudget}
         chip={chip}
         onChipChange={setChip}
+        formation={formation}
+        onFormationChange={setFormation}
       />
       <div className="flex flex-wrap gap-2">
         <input

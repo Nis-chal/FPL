@@ -5,7 +5,7 @@ import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
 import { bestInboundTargets, suggestTransfers } from "@/lib/transfers";
 import { rateTeam } from "@/lib/team-rating";
-import type { ScoredPlayer } from "@/lib/types";
+import type { PastSeasonStats, ScoredPlayer } from "@/lib/types";
 import {
   getCurrentEvent,
   getNextEvent,
@@ -204,8 +204,33 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
     ? new Date(currentEvent.deadline_time).getUTCFullYear() -
       (new Date(currentEvent.deadline_time).getUTCMonth() < 6 ? 1 : 0)
     : new Date().getUTCFullYear();
-  // PL season spanning Aug–May: label like 2026/27
+  // PL season spanning Aug–May: label like 2025/26
   const currentSeasonLabel = `${seasonStartYear}/${String(seasonStartYear + 1).slice(-2)}`;
+
+  const currentSeason: PastSeasonStats | null = element
+    ? {
+        season_name: currentSeasonLabel,
+        total_points: element.total_points,
+        minutes: element.minutes,
+        goals_scored: element.goals_scored,
+        assists: element.assists,
+        clean_sheets: element.clean_sheets,
+        goals_conceded: element.goals_conceded,
+        own_goals: element.own_goals,
+        penalties_saved: element.penalties_saved,
+        penalties_missed: element.penalties_missed,
+        yellow_cards: element.yellow_cards,
+        red_cards: element.red_cards,
+        saves: element.saves,
+        bonus: element.bonus,
+        bps: element.bps,
+        start_cost: undefined,
+        end_cost: element.now_cost,
+        expected_goals: element.expected_goals,
+        expected_assists: element.expected_assists,
+        expected_goal_involvements: element.expected_goal_involvements,
+      }
+    : null;
 
   return {
     player,
@@ -230,6 +255,8 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
       result: null as null,
     })),
     historyPast: [...summary.history_past].slice(0, 5),
+    currentSeason,
+    currentSeasonLabel,
     vsUpcoming: buildVsUpcomingClubs(upcomingFixtures, historyFull, {
       currentSeasonLabel,
       historicalByShort,

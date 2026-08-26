@@ -11,7 +11,7 @@ import {
   TransferPlayerChip,
 } from "@/components/PlayerTable";
 import { TeamRatingCard } from "@/components/TeamRatingCard";
-import { Card, ErrorBox } from "@/components/ui";
+import { Card, ErrorBox, TipTrigger } from "@/components/ui";
 import { useTeamId } from "@/hooks/useTeamId";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
@@ -20,6 +20,39 @@ import { applyHorizon } from "@/lib/scoring";
 import { bestInboundTargets } from "@/lib/transfers";
 import type { ScoredPlayer, TeamRating, TransferSuggestion } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
+
+function TransferExtraTip({ t }: { t: TransferSuggestion }) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+        Why this transfer
+      </div>
+      <div className="flex flex-wrap gap-1.5 text-[11px]">
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          In {t.in.expectedPointsPerGw.toFixed(1)} xPts/GW
+        </span>
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          Start {Math.round(t.in.startChance * 100)}%
+        </span>
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          xGI/90 {t.in.xgi90.toFixed(2)}
+        </span>
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          Win {t.in.nextWinChance}%
+        </span>
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          {t.threatDelta >= 0 ? "+" : ""}
+          {t.threatDelta} threat
+        </span>
+        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
+          {t.winChanceDelta >= 0 ? "+" : ""}
+          {t.winChanceDelta}% next-win
+        </span>
+      </div>
+      <Reasons reasons={t.reasons} />
+    </div>
+  );
+}
 
 export function TransfersClient({
   allPlayers,
@@ -41,6 +74,8 @@ export function TransfersClient({
     setBudget,
     chip,
     setChip,
+    formation,
+    setFormation,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -50,6 +85,7 @@ export function TransfersClient({
   const [teamRating, setTeamRating] = useState<TeamRating | null>(null);
   const [entryName, setEntryName] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [transfersOpen, setTransfersOpen] = useState(true);
 
   const targets = useMemo(() => {
     const scored = applyHorizon(allPlayers, horizon, includeAccumulated);
@@ -111,6 +147,8 @@ export function TransfersClient({
           onBudgetChange={setBudget}
           chip={chip}
           onChipChange={setChip}
+          formation={formation}
+          onFormationChange={setFormation}
         />
         <div className="w-full max-w-md">
           <TeamIdForm compact />
@@ -125,88 +163,100 @@ export function TransfersClient({
       {teamRating && <TeamRatingCard rating={teamRating} />}
 
       {transfers && (
-        <Card
-          title={`Personal transfers${entryName ? ` · ${entryName}` : ""}`}
-          subtitle={
-            hint ||
-            `Swaps for the next ${horizon} fixtures — ${rankByLabel(rankBy)}`
-          }
-        >
-          <div className="space-y-3">
-            {transfers.map((t) => (
-              <div
-                key={`${t.out.id}-${t.in.id}-${t.horizon}`}
-                className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-200">
-                    <PlayerLink playerId={t.out.id}>
-                      <TransferPlayerChip player={t.out} tone="out" />
-                    </PlayerLink>
-                    <span className="text-zinc-500">→</span>
-                    <PlayerLink playerId={t.in.id}>
-                      <TransferPlayerChip player={t.in} tone="in" />
-                    </PlayerLink>
-                    <span className="text-xs text-zinc-500">
-                      {t.out.position} · {t.out.teamShort} → {t.in.teamShort}
-                    </span>
-                    <AvailabilityBadge
-                      status={t.in.status}
-                      chanceOfPlaying={t.in.chanceOfPlaying}
-                      news={t.in.news}
-                    />
-                  </div>
-                  <div className="flex flex-wrap gap-3 text-right text-sm">
-                    <div>
-                      <div className="font-bold text-emerald-400">
-                        {t.netProjectedGain >= 0 ? "+" : ""}
-                        {t.netProjectedGain.toFixed(1)} proj
-                      </div>
-                      <div className="text-[11px] text-zinc-500">
-                        {t.costDelta === 0
-                          ? "even money"
-                          : t.costDelta > 0
-                            ? `costs ${formatPrice(t.costDelta)}`
-                            : `frees ${formatPrice(Math.abs(t.costDelta))}`}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-semibold text-zinc-200">
-                        {t.threatDelta >= 0 ? "+" : ""}
-                        {t.threatDelta} threat
-                      </div>
-                      <div className="text-[11px] text-zinc-500">
-                        {t.winChanceDelta >= 0 ? "+" : ""}
-                        {t.winChanceDelta}% next-win
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
-                    In {t.in.expectedPointsPerGw.toFixed(1)} xPts/GW
+        <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+          <button
+            type="button"
+            onClick={() => setTransfersOpen((v) => !v)}
+            aria-expanded={transfersOpen}
+            className="flex w-full items-start justify-between gap-3 px-4 py-4 text-left transition hover:bg-zinc-900/80 md:px-5"
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-bold text-zinc-100">
+                  Recommended transfers
+                  {entryName ? ` · ${entryName}` : ""}
+                </h2>
+                {transfers.length > 0 && (
+                  <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs font-bold text-emerald-400">
+                    {transfers.length}
                   </span>
-                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
-                    Start {Math.round(t.in.startChance * 100)}%
-                  </span>
-                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
-                    xGI/90 {t.in.xgi90.toFixed(2)}
-                  </span>
-                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-300">
-                    Win {t.in.nextWinChance}%
-                  </span>
-                </div>
-                <Reasons reasons={t.reasons} />
+                )}
               </div>
-            ))}
-            {transfers.length === 0 && (
-              <p className="text-sm text-zinc-500">
-                No strong upgrades found for this horizon within bank and club
-                limits.
+              <p className="mt-1 text-sm text-zinc-500">
+                {transfersOpen
+                  ? hint ||
+                    `Swaps for the next ${horizon} fixtures — ${rankByLabel(rankBy)}`
+                  : transfers.length === 0
+                    ? "No strong upgrades · click to expand"
+                    : `Top pick ${transfers[0].out.webName} → ${transfers[0].in.webName} · ${
+                        transfers[0].netProjectedGain >= 0 ? "+" : ""
+                      }${transfers[0].netProjectedGain.toFixed(1)} proj · click to expand`}
               </p>
-            )}
-          </div>
-        </Card>
+            </div>
+            <span
+              className={[
+                "mt-1 shrink-0 text-zinc-400 transition-transform",
+                transfersOpen ? "rotate-180" : "",
+              ].join(" ")}
+              aria-hidden
+            >
+              ▾
+            </span>
+          </button>
+          {transfersOpen && (
+            <div className="space-y-3 border-t border-zinc-800 px-4 py-4 md:px-5">
+              {transfers.map((t) => (
+                <div
+                  key={`${t.out.id}-${t.in.id}-${t.horizon}`}
+                  className="rounded-xl border border-zinc-800 bg-zinc-950/50 p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm text-zinc-200">
+                      <PlayerLink playerId={t.out.id}>
+                        <TransferPlayerChip player={t.out} tone="out" />
+                      </PlayerLink>
+                      <span className="text-zinc-500">→</span>
+                      <PlayerLink playerId={t.in.id}>
+                        <TransferPlayerChip player={t.in} tone="in" />
+                      </PlayerLink>
+                      <span className="text-xs text-zinc-500">
+                        {t.out.position} · {t.out.teamShort} → {t.in.teamShort}
+                      </span>
+                      <AvailabilityBadge
+                        status={t.in.status}
+                        chanceOfPlaying={t.in.chanceOfPlaying}
+                        news={t.in.news}
+                      />
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-3 text-right text-sm">
+                      <TipTrigger tip={<TransferExtraTip t={t} />} align="right">
+                        <div>
+                          <div className="font-bold text-emerald-400">
+                            {t.netProjectedGain >= 0 ? "+" : ""}
+                            {t.netProjectedGain.toFixed(1)} proj
+                          </div>
+                          <div className="text-[11px] text-zinc-500">
+                            {t.costDelta === 0
+                              ? "even money"
+                              : t.costDelta > 0
+                                ? `costs ${formatPrice(t.costDelta)}`
+                                : `frees ${formatPrice(Math.abs(t.costDelta))}`}
+                          </div>
+                        </div>
+                      </TipTrigger>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {transfers.length === 0 && (
+                <p className="text-sm text-zinc-500">
+                  No strong upgrades found for this horizon within bank and club
+                  limits.
+                </p>
+              )}
+            </div>
+          )}
+        </section>
       )}
 
       <Card

@@ -25,6 +25,46 @@ export function Card({
   );
 }
 
+/** Hover / focus tooltip trigger (works on touch via focus). */
+export function TipTrigger({
+  tip,
+  children,
+  className,
+  align = "left",
+}: {
+  tip: ReactNode;
+  children: ReactNode;
+  className?: string;
+  align?: "left" | "right";
+}) {
+  return (
+    <span
+      className={[
+        "group relative inline-flex cursor-help items-center gap-1",
+        className ?? "",
+      ].join(" ")}
+      tabIndex={0}
+    >
+      {children}
+      <span
+        className="rounded-full border border-zinc-600 px-1 text-[9px] font-bold leading-none text-zinc-400"
+        aria-hidden
+      >
+        ?
+      </span>
+      <span
+        role="tooltip"
+        className={[
+          "pointer-events-none absolute top-full z-30 mt-2 hidden w-72 max-w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-zinc-700 bg-zinc-950 p-3 text-left shadow-xl group-hover:block group-focus-within:block",
+          align === "right" ? "right-0" : "left-0",
+        ].join(" ")}
+      >
+        {tip}
+      </span>
+    </span>
+  );
+}
+
 export function Stat({
   label,
   value,

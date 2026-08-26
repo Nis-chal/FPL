@@ -15,19 +15,45 @@ function buildScore(p: ScoredPlayer, chip: ChipMode): number {
   return chipPlayerScore(p, chip);
 }
 
-export const FORMATIONS: Array<{
-  name: string;
-  DEF: number;
-  MID: number;
-  FWD: number;
-}> = [
+export const FORMATIONS = [
   { name: "3-4-3", DEF: 3, MID: 4, FWD: 3 },
   { name: "3-5-2", DEF: 3, MID: 5, FWD: 2 },
   { name: "4-4-2", DEF: 4, MID: 4, FWD: 2 },
   { name: "4-3-3", DEF: 4, MID: 3, FWD: 3 },
   { name: "5-4-1", DEF: 5, MID: 4, FWD: 1 },
   { name: "5-3-2", DEF: 5, MID: 3, FWD: 2 },
+] as const;
+
+export type FormationName = (typeof FORMATIONS)[number]["name"];
+/** Auto = pick the strongest legal XI; otherwise lock that shape. */
+export type FormationPreference = "auto" | FormationName;
+
+export const FORMATION_PREFERENCE_OPTIONS: Array<{
+  value: FormationPreference;
+  label: string;
+  hint: string;
+}> = [
+  { value: "auto", label: "Auto", hint: "Best XI points" },
+  ...FORMATIONS.map((f) => ({
+    value: f.name as FormationPreference,
+    label: f.name,
+    hint: `1-${f.DEF}-${f.MID}-${f.FWD}`,
+  })),
 ];
+
+export function parseFormationPreference(
+  raw: string | null | undefined,
+  fallback: FormationPreference = "auto",
+): FormationPreference {
+  if (raw == null || raw === "" || raw === "auto") return "auto";
+  if (FORMATIONS.some((f) => f.name === raw)) return raw as FormationName;
+  return fallback;
+}
+
+export function formationPreferenceLabel(pref: FormationPreference): string {
+  if (pref === "auto") return "Auto formation";
+  return pref;
+}
 
 /**
  * Rank legal FPL formations by projected XI points from a player pool
@@ -124,7 +150,66 @@ function canAdd(
   return true;
 }
 
-function pickBestXi(squad: ScoredPlayer[]): {
+function posCounts(squad: ScoredPlayer[]): Record<Position, number> {
+  return {
+    GKP: squad.filter((p) => p.position === "GKP").length,
+    DEF: squad.filter((p) => p.position === "DEF").length,
+    MID: squad.filter((p) => p.position === "MID").length,
+    FWD: squad.filter((p) => p.position === "FWD").length,
+  };
+}
+
+/** Cheapest price seen per position in a candidate pool. */
+function minPriceByPos(candidates: ScoredPlayer[]): Record<Position, number> {
+  const mins: Record<Position, number> = {
+    GKP: Number.POSITIVE_INFINITY,
+    DEF: Number.POSITIVE_INFINITY,
+    MID: Number.POSITIVE_INFINITY,
+    FWD: Number.POSITIVE_INFINITY,
+  };
+  for (const p of candidates) {
+    if (p.price < mins[p.position]) mins[p.position] = p.price;
+  }
+  for (const pos of Object.keys(mins) as Position[]) {
+    if (!Number.isFinite(mins[pos])) mins[pos] = 40; // £4.0m fallback
+  }
+  return mins;
+}
+
+/** Lowest cost to finish a legal 2–5–5–3 from the current squad. */
+function minCostToComplete(
+  squad: ScoredPlayer[],
+  mins: Record<Position, number>,
+): number {
+  const counts = posCounts(squad);
+  let cost = 0;
+  for (const pos of ["GKP", "DEF", "MID", "FWD"] as Position[]) {
+    const need = SQUAD_LIMITS[pos] - counts[pos];
+    if (need > 0) cost += need * mins[pos];
+  }
+  return cost;
+}
+
+function orderBench(
+  bench: ScoredPlayer[],
+  scoreFn: (p: ScoredPlayer) => number,
+): ScoredPlayer[] {
+  return [...bench].sort((a, b) => {
+    if (a.position === "GKP" && b.position !== "GKP") return -1;
+    if (b.position === "GKP" && a.position !== "GKP") return 1;
+    return scoreFn(b) - scoreFn(a);
+  });
+}
+
+/**
+ * Split a 15 into best legal XI (max score) + exactly 4 bench.
+ * With a locked formation preference, only that shape is tried (falls back to auto).
+ */
+function pickBestXi(
+  squad: ScoredPlayer[],
+  scoreFn: (p: ScoredPlayer) => number = (p) => p.projectedPoints,
+  preferred: FormationPreference = "auto",
+): {
   startingXi: ScoredPlayer[];
   bench: ScoredPlayer[];
   formation: string;
@@ -139,94 +224,98 @@ function pickBestXi(squad: ScoredPlayer[]): {
 
   const byPos = (pos: Position) =>
     [...squad.filter((p) => p.position === pos)].sort(
-      (a, b) => b.projectedPoints - a.projectedPoints,
+      (a, b) => scoreFn(b) - scoreFn(a),
     );
 
-  for (const formation of FORMATIONS) {
-    const gk = byPos("GKP");
-    const def = byPos("DEF");
-    const mid = byPos("MID");
-    const fwd = byPos("FWD");
+  const tryFormations =
+    preferred === "auto"
+      ? FORMATIONS
+      : FORMATIONS.filter((f) => f.name === preferred);
 
-    if (
-      gk.length < 1 ||
-      def.length < formation.DEF ||
-      mid.length < formation.MID ||
-      fwd.length < formation.FWD
-    ) {
-      continue;
+  const evaluate = (
+    list: typeof FORMATIONS | readonly (typeof FORMATIONS)[number][],
+  ) => {
+    for (const formation of list) {
+      const gk = byPos("GKP");
+      const def = byPos("DEF");
+      const mid = byPos("MID");
+      const fwd = byPos("FWD");
+
+      if (
+        gk.length < 1 ||
+        def.length < formation.DEF ||
+        mid.length < formation.MID ||
+        fwd.length < formation.FWD
+      ) {
+        continue;
+      }
+
+      const startingXi = [
+        gk[0],
+        ...def.slice(0, formation.DEF),
+        ...mid.slice(0, formation.MID),
+        ...fwd.slice(0, formation.FWD),
+      ];
+      if (startingXi.length !== 11) continue;
+
+      const startIds = new Set(startingXi.map((p) => p.id));
+      const bench = orderBench(
+        squad.filter((p) => !startIds.has(p.id)),
+        scoreFn,
+      );
+      if (squad.length === 15 && bench.length !== 4) continue;
+
+      const projectedPoints = startingXi.reduce(
+        (sum, p) => sum + p.projectedPoints,
+        0,
+      );
+
+      if (!best || projectedPoints > best.projectedPoints) {
+        best = {
+          startingXi,
+          bench: bench.slice(0, Math.max(0, squad.length - 11)),
+          formation: formation.name,
+          projectedPoints: Number(projectedPoints.toFixed(2)),
+        };
+      }
     }
+  };
 
-    const startingXi = [
-      gk[0],
-      ...def.slice(0, formation.DEF),
-      ...mid.slice(0, formation.MID),
-      ...fwd.slice(0, formation.FWD),
-    ];
-    const startIds = new Set(startingXi.map((p) => p.id));
-    const bench = squad
-      .filter((p) => !startIds.has(p.id))
-      .sort((a, b) => {
-        // Bench GK first typically, then by projection
-        if (a.position === "GKP" && b.position !== "GKP") return -1;
-        if (b.position === "GKP" && a.position !== "GKP") return 1;
-        return b.projectedPoints - a.projectedPoints;
-      });
-
-    const projectedPoints = startingXi.reduce(
-      (sum, p) => sum + p.projectedPoints,
-      0,
-    );
-
-    if (!best || projectedPoints > best.projectedPoints) {
-      best = {
-        startingXi,
-        bench,
-        formation: formation.name,
-        projectedPoints: Number(projectedPoints.toFixed(2)),
-      };
-    }
+  evaluate(tryFormations);
+  if (!best && preferred !== "auto") {
+    evaluate(FORMATIONS);
   }
 
   if (!best) {
-    // Fallback: top 11 by projection with at least 1 GK, 3 DEF, 2 MID, 1 FWD
-    const sorted = [...squad].sort((a, b) => b.projectedPoints - a.projectedPoints);
+    const sorted = [...squad].sort((a, b) => scoreFn(b) - scoreFn(a));
     const xi: ScoredPlayer[] = [];
     for (const p of sorted) {
       if (xi.length >= 11) break;
-      const counts = {
-        GKP: xi.filter((x) => x.position === "GKP").length,
-        DEF: xi.filter((x) => x.position === "DEF").length,
-        MID: xi.filter((x) => x.position === "MID").length,
-        FWD: xi.filter((x) => x.position === "FWD").length,
-      };
+      const counts = posCounts(xi);
       if (p.position === "GKP" && counts.GKP >= 1) continue;
       if (p.position === "DEF" && counts.DEF >= 5) continue;
       if (p.position === "MID" && counts.MID >= 5) continue;
       if (p.position === "FWD" && counts.FWD >= 3) continue;
-      // Ensure room for minimums
-      const remaining = 11 - xi.length - 1;
-      const need =
-        Math.max(0, 1 - counts.GKP) +
-        Math.max(0, 3 - counts.DEF) +
-        Math.max(0, 2 - counts.MID) +
-        Math.max(0, 1 - counts.FWD);
+      const remainingSlots = 11 - xi.length - 1;
       const wouldNeed =
-        (p.position === "GKP" ? Math.max(0, 1 - (counts.GKP + 1)) : Math.max(0, 1 - counts.GKP)) +
-        (p.position === "DEF" ? Math.max(0, 3 - (counts.DEF + 1)) : Math.max(0, 3 - counts.DEF)) +
-        (p.position === "MID" ? Math.max(0, 2 - (counts.MID + 1)) : Math.max(0, 2 - counts.MID)) +
-        (p.position === "FWD" ? Math.max(0, 1 - (counts.FWD + 1)) : Math.max(0, 1 - counts.FWD));
-      if (wouldNeed > remaining) continue;
-      void need;
+        Math.max(0, 1 - (counts.GKP + (p.position === "GKP" ? 1 : 0))) +
+        Math.max(0, 3 - (counts.DEF + (p.position === "DEF" ? 1 : 0))) +
+        Math.max(0, 2 - (counts.MID + (p.position === "MID" ? 1 : 0))) +
+        Math.max(0, 1 - (counts.FWD + (p.position === "FWD" ? 1 : 0)));
+      if (wouldNeed > remainingSlots) continue;
       xi.push(p);
     }
     const ids = new Set(xi.map((p) => p.id));
+    const bench = orderBench(
+      squad.filter((p) => !ids.has(p.id)),
+      scoreFn,
+    );
     best = {
-      startingXi: xi,
-      bench: squad.filter((p) => !ids.has(p.id)),
+      startingXi: xi.slice(0, 11),
+      bench: bench.slice(0, 4),
       formation: "Custom",
       projectedPoints: Number(
-        xi.reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
+        xi.slice(0, 11).reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
       ),
     };
   }
@@ -235,14 +324,14 @@ function pickBestXi(squad: ScoredPlayer[]): {
 }
 
 /**
- * Greedy squad builder: fill each position with best projected players under budget/club caps.
- * Then refine by trying to swap in higher-value alternatives within residual budget.
- * @param budgetTenths Squad budget in tenths of £m (default 1000 = £100.0m). Capped at BUDGET.
+ * Build a full 15 (best XI + 4 bench) at ≤ budget, hard-capped at £100.0m.
+ * Never exceeds budget; may finish under.
  */
 export function buildBestSquad(
   scored: ScoredPlayer[],
   budgetTenths: number = BUDGET,
   chip: ChipMode = "none",
+  formationPref: FormationPreference = "auto",
 ): BestSquad {
   const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
   const minAvail = chip === "bench_boost" || chip === "free_hit" ? 0.4 : 0.35;
@@ -250,8 +339,19 @@ export function buildBestSquad(
     .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4)
     .filter((p) => p.availabilityFactor >= minAvail);
 
+  const scoreFn = (p: ScoredPlayer) => buildScore(p, chip);
+  const mins = minPriceByPos(candidates);
   const squad: ScoredPlayer[] = [];
   let remaining = budget;
+
+  const tryAdd = (player: ScoredPlayer): boolean => {
+    if (!canAdd(player, squad, remaining)) return false;
+    const after = [...squad, player];
+    if (remaining - player.price < minCostToComplete(after, mins)) return false;
+    squad.push(player);
+    remaining -= player.price;
+    return true;
+  };
 
   const positions: Position[] = ["GKP", "DEF", "MID", "FWD"];
   for (const pos of positions) {
@@ -259,20 +359,26 @@ export function buildBestSquad(
     const pool = candidates
       .filter((p) => p.position === pos)
       .sort((a, b) => {
-        const diff = buildScore(b, chip) - buildScore(a, chip);
+        const diff = scoreFn(b) - scoreFn(a);
         if (Math.abs(diff) > 1e-9) return diff;
         return b.valueScore - a.valueScore;
       });
-
     for (const player of pool) {
       if (squad.filter((p) => p.position === pos).length >= needed) break;
-      if (!canAdd(player, squad, remaining)) continue;
-      squad.push(player);
-      remaining -= player.price;
+      tryAdd(player);
     }
   }
 
-  // Fill any shortfall with cheapest available
+  if (squad.length < 15) {
+    const pool = [...candidates].sort(
+      (a, b) => a.price - b.price || scoreFn(b) - scoreFn(a),
+    );
+    for (const player of pool) {
+      if (squad.length >= 15) break;
+      tryAdd(player);
+    }
+  }
+
   if (squad.length < 15) {
     const pool = [...candidates].sort((a, b) => a.price - b.price);
     for (const player of pool) {
@@ -283,15 +389,12 @@ export function buildBestSquad(
     }
   }
 
-  // Upgrade pass under chip / projection score
-  const upgrades = [...candidates].sort(
-    (a, b) => buildScore(b, chip) - buildScore(a, chip),
-  );
+  const upgrades = [...candidates].sort((a, b) => scoreFn(b) - scoreFn(a));
   for (const candidate of upgrades) {
     if (squad.some((p) => p.id === candidate.id)) continue;
     const samePos = squad
       .filter((p) => p.position === candidate.position)
-      .sort((a, b) => buildScore(a, chip) - buildScore(b, chip));
+      .sort((a, b) => scoreFn(a) - scoreFn(b));
     for (const weak of samePos) {
       const afterRemove = squad.filter((p) => p.id !== weak.id);
       const bank = remaining + weak.price;
@@ -299,18 +402,34 @@ export function buildBestSquad(
         afterRemove.filter((p) => p.teamId === candidate.teamId).length < 3;
       if (!clubOk) continue;
       if (candidate.price > bank) continue;
-      if (buildScore(candidate, chip) <= buildScore(weak, chip) + 0.15) continue;
+      if (scoreFn(candidate) <= scoreFn(weak) + 0.15) continue;
+      const nextRemaining = bank - candidate.price;
+      if (nextRemaining < 0) continue;
       const idx = squad.findIndex((p) => p.id === weak.id);
       squad[idx] = candidate;
-      remaining = bank - candidate.price;
+      remaining = nextRemaining;
       break;
     }
   }
 
-  const { startingXi, bench, formation, projectedPoints } = pickBestXi(squad);
-  const orderedXi = [...startingXi].sort(
-    (a, b) => buildScore(b, chip) - buildScore(a, chip),
+  let totalCost = squad.reduce((s, p) => s + p.price, 0);
+  if (totalCost > budget) {
+    while (totalCost > budget && squad.length > 0) {
+      squad.sort((a, b) => b.price - a.price);
+      const dropped = squad.shift();
+      if (!dropped) break;
+      totalCost -= dropped.price;
+    }
+  }
+  remaining = Math.max(0, budget - totalCost);
+  totalCost = squad.reduce((s, p) => s + p.price, 0);
+
+  const { startingXi, formation, projectedPoints } = pickBestXi(
+    squad,
+    scoreFn,
+    formationPref,
   );
+  const orderedXi = [...startingXi].sort((a, b) => scoreFn(b) - scoreFn(a));
   const captain = orderedXi[0] ?? squad[0];
   const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
 
@@ -326,17 +445,23 @@ export function buildBestSquad(
       captain: fallback,
       viceCaptain: fallback,
       formation: "—",
-      totalCost: budget - remaining,
+      totalCost,
       projectedPoints: 0,
       bank: remaining,
     };
   }
 
+  const xiIds = new Set(startingXi.map((p) => p.id));
+  const finalBench = orderBench(
+    squad.filter((p) => !xiIds.has(p.id)),
+    scoreFn,
+  ).slice(0, 4);
+  const finalXi = startingXi.length === 11 ? startingXi : startingXi.slice(0, 11);
+
   const xiOrFifteen =
     chip === "bench_boost"
       ? squad.reduce((s, p) => s + p.projectedPoints, 0)
       : projectedPoints;
-  // Headline: captain doubles normally; Triple Captain triples; BB uses full 15.
   const captainExtra =
     chip === "bench_boost"
       ? 0
@@ -346,15 +471,14 @@ export function buildBestSquad(
 
   return {
     squad: [...squad].sort(
-      (a, b) =>
-        a.positionId - b.positionId || buildScore(b, chip) - buildScore(a, chip),
+      (a, b) => a.positionId - b.positionId || scoreFn(b) - scoreFn(a),
     ),
-    startingXi,
-    bench,
+    startingXi: finalXi,
+    bench: finalBench,
     captain,
     viceCaptain,
     formation,
-    totalCost: budget - remaining,
+    totalCost,
     projectedPoints: Number((xiOrFifteen + captainExtra).toFixed(2)),
     bank: remaining,
   };
@@ -368,53 +492,79 @@ function finalizeSquad(
   scored: ScoredPlayer[],
   optimize: "points" | "rating",
   horizon: number,
+  formationPref: FormationPreference = "auto",
 ): BestSquad {
-  let bestXi = pickBestXi(squad);
+  const scoreFn =
+    optimize === "rating"
+      ? (p: ScoredPlayer) => playerRatingContribution(p)
+      : (p: ScoredPlayer) => p.projectedPoints;
+  let bestXi = pickBestXi(squad, scoreFn, formationPref);
   if (optimize === "rating") {
     let bestScore = rateTeam(squad, bestXi.startingXi, horizon).score;
-    for (const formation of FORMATIONS) {
-      const byPos = (pos: Position) =>
-        [...squad.filter((p) => p.position === pos)].sort(
-          (a, b) =>
-            playerRatingContribution(b) - playerRatingContribution(a),
+    const list =
+      formationPref === "auto"
+        ? FORMATIONS
+        : FORMATIONS.filter((f) => f.name === formationPref);
+    const evaluate = (formations: typeof list) => {
+      for (const formation of formations) {
+        const byPos = (pos: Position) =>
+          [...squad.filter((p) => p.position === pos)].sort(
+            (a, b) =>
+              playerRatingContribution(b) - playerRatingContribution(a),
+          );
+        const gk = byPos("GKP");
+        const def = byPos("DEF");
+        const mid = byPos("MID");
+        const fwd = byPos("FWD");
+        if (
+          gk.length < 1 ||
+          def.length < formation.DEF ||
+          mid.length < formation.MID ||
+          fwd.length < formation.FWD
+        ) {
+          continue;
+        }
+        const startingXi = [
+          gk[0],
+          ...def.slice(0, formation.DEF),
+          ...mid.slice(0, formation.MID),
+          ...fwd.slice(0, formation.FWD),
+        ];
+        const startIds = new Set(startingXi.map((p) => p.id));
+        const bench = squad.filter((p) => !startIds.has(p.id));
+        const projectedPoints = Number(
+          startingXi.reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
         );
-      const gk = byPos("GKP");
-      const def = byPos("DEF");
-      const mid = byPos("MID");
-      const fwd = byPos("FWD");
-      if (
-        gk.length < 1 ||
-        def.length < formation.DEF ||
-        mid.length < formation.MID ||
-        fwd.length < formation.FWD
-      ) {
-        continue;
+        const score = rateTeam(squad, startingXi, horizon).score;
+        if (score > bestScore) {
+          bestScore = score;
+          bestXi = {
+            startingXi,
+            bench,
+            formation: formation.name,
+            projectedPoints,
+          };
+        }
       }
-      const startingXi = [
-        gk[0],
-        ...def.slice(0, formation.DEF),
-        ...mid.slice(0, formation.MID),
-        ...fwd.slice(0, formation.FWD),
-      ];
-      const startIds = new Set(startingXi.map((p) => p.id));
-      const bench = squad.filter((p) => !startIds.has(p.id));
-      const projectedPoints = Number(
-        startingXi.reduce((s, p) => s + p.projectedPoints, 0).toFixed(2),
-      );
-      const score = rateTeam(squad, startingXi, horizon).score;
-      if (score > bestScore) {
-        bestScore = score;
-        bestXi = {
-          startingXi,
-          bench,
-          formation: formation.name,
-          projectedPoints,
-        };
-      }
+    };
+    evaluate(list);
+    if (
+      formationPref !== "auto" &&
+      bestXi.formation !== formationPref
+    ) {
+      evaluate(FORMATIONS);
     }
   }
 
-  const { startingXi, bench, formation, projectedPoints } = bestXi;
+  const { startingXi, formation, projectedPoints } = bestXi;
+  const xiIds = new Set(startingXi.map((p) => p.id));
+  const bench = orderBench(
+    squad.filter((p) => !xiIds.has(p.id)),
+    (p) =>
+      optimize === "rating"
+        ? playerRatingContribution(p)
+        : p.projectedPoints,
+  ).slice(0, 4);
   const orderedXi = [...startingXi].sort((a, b) =>
     optimize === "rating"
       ? playerRatingContribution(b) - playerRatingContribution(a)
@@ -446,16 +596,16 @@ function finalizeSquad(
       (a, b) =>
         a.positionId - b.positionId || b.projectedPoints - a.projectedPoints,
     ),
-    startingXi,
+    startingXi: startingXi.slice(0, 11),
     bench,
     captain,
     viceCaptain,
     formation,
-    totalCost: budget - remaining,
+    totalCost: Math.min(budget, budget - remaining),
     projectedPoints: Number(
       (projectedPoints + captain.projectedPoints).toFixed(2),
     ),
-    bank: remaining,
+    bank: Math.max(0, remaining),
   };
 }
 
@@ -467,6 +617,7 @@ export function buildBestSquadByRating(
   scored: ScoredPlayer[],
   budgetTenths: number = BUDGET,
   horizon = 5,
+  formationPref: FormationPreference = "auto",
 ): BestSquad {
   const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
   const candidates = scored
@@ -523,6 +674,7 @@ export function buildBestSquadByRating(
       scored,
       "rating",
       horizon,
+      formationPref,
     );
     const currentScore = rateTeam(
       current.squad,
@@ -553,6 +705,7 @@ export function buildBestSquadByRating(
           scored,
           "rating",
           horizon,
+          formationPref,
         );
         const trialScore = rateTeam(
           trialBuilt.squad,
@@ -578,6 +731,7 @@ export function buildBestSquadByRating(
     scored,
     "rating",
     horizon,
+    formationPref,
   );
 }
 
@@ -588,10 +742,16 @@ export function buildRecommendedSquad(
   horizon: number,
   rankBy: RankBy | RankBy[],
   chip: ChipMode = "none",
+  formationPref: FormationPreference = "auto",
 ): BestSquad {
   const modes = Array.isArray(rankBy) ? rankBy : [rankBy];
   if (modes.includes("team_rating") && chip === "none") {
-    return buildBestSquadByRating(scored, budgetTenths, horizon);
+    return buildBestSquadByRating(
+      scored,
+      budgetTenths,
+      horizon,
+      formationPref,
+    );
   }
-  return buildBestSquad(scored, budgetTenths, chip);
+  return buildBestSquad(scored, budgetTenths, chip, formationPref);
 }

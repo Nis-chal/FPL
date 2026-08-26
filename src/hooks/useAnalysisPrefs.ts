@@ -14,6 +14,10 @@ import {
   serializeRankBy,
   toggleRankBy,
 } from "@/lib/ranking";
+import {
+  parseFormationPreference,
+  type FormationPreference,
+} from "@/lib/squad";
 import type { PriceBounds, RankBy } from "@/lib/types";
 import { BUDGET, clampBudget, parseBudget } from "@/lib/utils";
 
@@ -23,12 +27,14 @@ const MAX_PRICE_KEY = "fpl-assistant-maxPrice";
 const HORIZON_KEY = "fpl-assistant-horizon";
 const BUDGET_KEY = "fpl-assistant-budget";
 const CHIP_KEY = "fpl-assistant-chip";
+const FORMATION_KEY = "fpl-assistant-formation";
 
 export function useAnalysisPrefs(defaults?: {
   rankBy?: RankBy[];
   horizon?: number;
   budget?: number;
   chip?: ChipMode;
+  formation?: FormationPreference;
 }) {
   const [rankBy, setRankByState] = useState<RankBy[]>(
     defaults?.rankBy ?? ["overall"],
@@ -36,6 +42,9 @@ export function useAnalysisPrefs(defaults?: {
   const [horizon, setHorizonState] = useState(defaults?.horizon ?? 5);
   const [budget, setBudgetState] = useState(defaults?.budget ?? BUDGET);
   const [chip, setChipState] = useState<ChipMode>(defaults?.chip ?? "none");
+  const [formation, setFormationState] = useState<FormationPreference>(
+    defaults?.formation ?? "auto",
+  );
   const [priceBounds, setPriceBoundsState] = useState<PriceBounds>({
     minPrice: null,
     maxPrice: null,
@@ -55,6 +64,13 @@ export function useAnalysisPrefs(defaults?: {
       defaults?.chip ?? "none",
     );
     setChipState(nextChip);
+
+    setFormationState(
+      parseFormationPreference(
+        params.get("formation") ?? window.localStorage.getItem(FORMATION_KEY),
+        defaults?.formation ?? "auto",
+      ),
+    );
 
     const chipHorizon = horizonForChip(nextChip);
     const implied = horizonForRankBy(nextRank);
@@ -99,6 +115,7 @@ export function useAnalysisPrefs(defaults?: {
       priceBounds?: PriceBounds;
       budget?: number;
       chip?: ChipMode;
+      formation?: FormationPreference;
     }) => {
       const url = new URL(window.location.href);
       if (next.rankBy !== undefined) {
@@ -122,6 +139,15 @@ export function useAnalysisPrefs(defaults?: {
         } else {
           url.searchParams.set("chip", next.chip);
           window.localStorage.setItem(CHIP_KEY, next.chip);
+        }
+      }
+      if (next.formation !== undefined) {
+        if (next.formation === "auto") {
+          url.searchParams.delete("formation");
+          window.localStorage.removeItem(FORMATION_KEY);
+        } else {
+          url.searchParams.set("formation", next.formation);
+          window.localStorage.setItem(FORMATION_KEY, next.formation);
         }
       }
       if (next.priceBounds !== undefined) {
@@ -224,6 +250,14 @@ export function useAnalysisPrefs(defaults?: {
     [syncUrl],
   );
 
+  const setFormation = useCallback(
+    (value: FormationPreference) => {
+      setFormationState(value);
+      syncUrl({ formation: value });
+    },
+    [syncUrl],
+  );
+
   const setPriceBounds = useCallback(
     (bounds: PriceBounds) => {
       setPriceBoundsState(bounds);
@@ -238,15 +272,17 @@ export function useAnalysisPrefs(defaults?: {
     setHorizonState(defaults?.horizon ?? 5);
     setBudgetState(defaultBudget);
     setChipState("none");
+    setFormationState(defaults?.formation ?? "auto");
     setPriceBoundsState({ minPrice: null, maxPrice: null });
     syncUrl({
       rankBy: ["overall"],
       horizon: defaults?.horizon ?? 5,
       budget: defaultBudget,
       chip: "none",
+      formation: "auto",
       priceBounds: { minPrice: null, maxPrice: null },
     });
-  }, [defaults?.horizon, defaults?.budget, syncUrl]);
+  }, [defaults?.horizon, defaults?.budget, defaults?.formation, syncUrl]);
 
   return {
     ready,
@@ -255,6 +291,8 @@ export function useAnalysisPrefs(defaults?: {
     toggleRank,
     chip,
     setChip,
+    formation,
+    setFormation,
     horizon,
     setHorizon,
     budget,

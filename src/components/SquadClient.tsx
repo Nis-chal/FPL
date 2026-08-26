@@ -95,6 +95,8 @@ export function SquadClient({
     setBudget,
     chip,
     setChip,
+    formation,
+    setFormation,
     priceBounds,
     setPriceBounds,
   } = useAnalysisPrefs({ horizon: initialHorizon });
@@ -126,7 +128,14 @@ export function SquadClient({
   }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
   const built = useMemo(() => {
-    const squad = buildRecommendedSquad(scored, budget, horizon, rankBy, chip);
+    const squad = buildRecommendedSquad(
+      scored,
+      budget,
+      horizon,
+      rankBy,
+      chip,
+      formation,
+    );
     if (!squad.captain || squad.startingXi.length === 0) {
       return squad;
     }
@@ -144,7 +153,7 @@ export function SquadClient({
       captain,
       viceCaptain: vice,
     };
-  }, [scored, rankBy, budget, horizon, seasonBasis, chip]);
+  }, [scored, rankBy, budget, horizon, seasonBasis, chip, formation]);
 
   const formations = useMemo(() => rankFormations(scored), [scored]);
 
@@ -442,6 +451,8 @@ export function SquadClient({
             onBudgetChange={setBudget}
             chip={chip}
             onChipChange={setChip}
+            formation={formation}
+            onFormationChange={setFormation}
           />
           <SquadBudgetChips budget={budget} onChange={setBudget} />
         </div>
@@ -460,8 +471,12 @@ export function SquadClient({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Stat
-          label="Best formation"
-          value={formations[0]?.name ?? formationFromXi(activeModel.startingXi)}
+          label={formation === "auto" ? "Best formation" : "Locked formation"}
+          value={
+            formation !== "auto"
+              ? formation
+              : (formations[0]?.name ?? formationFromXi(activeModel.startingXi))
+          }
           accent
         />
         <Stat
