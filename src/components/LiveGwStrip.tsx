@@ -70,7 +70,11 @@ export function LiveGwStrip() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-            Live GW
+            {data.isLive
+              ? "Live GW"
+              : data.event.finished
+                ? "Latest GW"
+                : "Current GW"}
           </p>
           <h2 className="text-lg font-bold text-zinc-50">
             {data.event.name}
@@ -83,6 +87,11 @@ export function LiveGwStrip() {
             {data.event.finished && (
               <span className="ml-2 text-xs font-semibold text-zinc-500">
                 Finished
+              </span>
+            )}
+            {!data.isLive && !data.event.finished && (
+              <span className="ml-2 text-xs font-semibold text-zinc-500">
+                Upcoming
               </span>
             )}
           </h2>

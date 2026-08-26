@@ -4,7 +4,7 @@ import { ErrorBox } from "@/components/ui";
 import { getLeagueInsights } from "@/lib/insights";
 import { formatPrice } from "@/lib/utils";
 
-export const revalidate = 60;
+export const revalidate = 30;
 
 export default async function HomePage() {
   let insights;
@@ -23,19 +23,32 @@ export default async function HomePage() {
   }
 
   const { currentEvent, nextEvent, scored, bestSquad } = insights;
+  const gwLabel = currentEvent?.name ?? "Current gameweek";
+  const deadline =
+    currentEvent?.deadline_time != null
+      ? new Date(currentEvent.deadline_time).toLocaleString(undefined, {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      : null;
 
   return (
     <div className="space-y-6">
       <div>
         <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
-          League-wide insights
+          {gwLabel}
+          {deadline ? ` · deadline ${deadline}` : ""}
         </p>
         <h1 className="mt-1 text-3xl font-bold text-zinc-50 md:text-4xl">
           Expected points outlook
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Analyze by price, start chance, xPts, xGI/90, win/CS, or next fixtures.
-          Live GW data refreshes while matches are in play. Add your team ID for
+          Always tracks the latest FPL gameweek
+          {nextEvent ? ` (next: ${nextEvent.name})` : ""}. Analyze by price,
+          start chance, xPts, xGI/90, win/CS, or fixtures. Add your team ID for
           personal transfers and a squad rating.
         </p>
       </div>

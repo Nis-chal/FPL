@@ -1,6 +1,7 @@
 "use client";
 
 import type { ElementHistory, PastSeasonStats } from "@/lib/types";
+import { sortSeasonsLatestFirst } from "@/lib/season-sort";
 import { Card } from "@/components/ui";
 
 type GwRow = {
@@ -220,6 +221,7 @@ export function PlayerProgressSection({
   );
 }
 
+/** Newest FPL seasons first. */
 export function PastSeasonsTable({
   seasons,
   currentSeason,
@@ -228,11 +230,13 @@ export function PastSeasonsTable({
   /** Live 25/26 (or current) season totals — FPL does not put these in history_past. */
   currentSeason?: PastSeasonStats | null;
 }) {
-  const prior = [...seasons].filter(
-    (s) =>
-      !currentSeason ||
-      s.season_name.replace(/-/g, "/") !==
-        currentSeason.season_name.replace(/-/g, "/"),
+  const prior = sortSeasonsLatestFirst(
+    seasons.filter(
+      (s) =>
+        !currentSeason ||
+        s.season_name.replace(/-/g, "/") !==
+          currentSeason.season_name.replace(/-/g, "/"),
+    ),
   );
   const rows = currentSeason
     ? [currentSeason, ...prior].slice(0, 6)

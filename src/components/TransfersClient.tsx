@@ -70,8 +70,6 @@ export function TransfersClient({
     resetFilters,
     horizon,
     setHorizon,
-    budget,
-    setBudget,
     chip,
     setChip,
     formation,
@@ -143,8 +141,6 @@ export function TransfersClient({
           onReset={resetFilters}
           priceBounds={priceBounds}
           onPriceBoundsChange={setPriceBounds}
-          budget={budget}
-          onBudgetChange={setBudget}
           chip={chip}
           onChipChange={setChip}
           formation={formation}

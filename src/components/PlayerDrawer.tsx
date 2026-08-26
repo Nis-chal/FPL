@@ -77,6 +77,16 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
     vsUpcoming,
   } = detail;
 
+  const tabs = [
+    { id: "overview", label: "Overview" },
+    { id: "form", label: "Form" },
+    { id: "seasons", label: "Seasons" },
+    { id: "fixtures", label: "Fixtures" },
+    { id: "history", label: "GWs" },
+  ] as const;
+  type TabId = (typeof tabs)[number]["id"];
+  const [tab, setTab] = useState<TabId>("overview");
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start gap-4">
@@ -114,152 +124,198 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
         ]}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Stat
-          label="xPts / GW"
-          value={player.expectedPointsPerGw.toFixed(1)}
-          accent
-          tip={
-            <div className="space-y-1.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                Why this score
-              </div>
-              <p className="text-xs text-zinc-400">
-                Built mainly from {currentSeasonLabel} minutes, form, xG/xA and
-                upcoming fixtures.
-              </p>
-              <Reasons reasons={player.reasons} />
-            </div>
-          }
-        />
-        <Stat
-          label="Horizon xPts"
-          value={player.projectedPoints.toFixed(1)}
-          tip={
-            <div className="space-y-1.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
-                Why this score
-              </div>
-              <p className="text-xs text-zinc-400">
-                Summed projected points over the active fixture horizon using
-                current-season rates.
-              </p>
-              <Reasons reasons={player.reasons} />
-            </div>
-          }
-        />
-        <Stat
-          label="Start chance"
-          value={`${Math.round(player.startChance * 100)}%`}
-        />
-        <Stat label="xGI / 90" value={player.xgi90.toFixed(2)} />
+      <div
+        role="tablist"
+        aria-label="Player detail sections"
+        className="flex gap-1 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 p-1"
+      >
+        {tabs.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setTab(t.id)}
+              className={[
+                "shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold transition",
+                active
+                  ? "bg-emerald-500 text-zinc-950"
+                  : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100",
+              ].join(" ")}
+            >
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
-      {currentSeason && (
-        <Card
-          title={`${currentSeasonLabel} season`}
-          subtitle="Live FPL totals for the current campaign"
-        >
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <Stat label="Total pts" value={String(currentSeason.total_points)} accent />
-            <Stat label="Minutes" value={String(currentSeason.minutes)} />
+      {tab === "overview" && (
+        <div className="space-y-5">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Stat
-              label="Goals"
-              value={String(currentSeason.goals_scored)}
-            />
-            <Stat label="Assists" value={String(currentSeason.assists)} />
-            <Stat
-              label="Clean sheets"
-              value={String(currentSeason.clean_sheets ?? 0)}
-            />
-            <Stat label="Bonus" value={String(currentSeason.bonus ?? 0)} />
-            <Stat label="Form" value={player.form.toFixed(1)} />
-            <Stat
-              label="xGI (season)"
-              value={
-                currentSeason.expected_goal_involvements != null
-                  ? Number(currentSeason.expected_goal_involvements).toFixed(1)
-                  : "—"
+              label="xPts / GW"
+              value={player.expectedPointsPerGw.toFixed(1)}
+              accent
+              tip={
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                    Why this score
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Built mainly from {currentSeasonLabel} minutes, form, xG/xA
+                    and upcoming fixtures.
+                  </p>
+                  <Reasons reasons={player.reasons} />
+                </div>
               }
             />
+            <Stat
+              label="Horizon xPts"
+              value={player.projectedPoints.toFixed(1)}
+              tip={
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
+                    Why this score
+                  </div>
+                  <p className="text-xs text-zinc-400">
+                    Summed projected points over the active fixture horizon
+                    using current-season rates.
+                  </p>
+                  <Reasons reasons={player.reasons} />
+                </div>
+              }
+            />
+            <Stat
+              label="Start chance"
+              value={`${Math.round(player.startChance * 100)}%`}
+            />
+            <Stat label="xGI / 90" value={player.xgi90.toFixed(2)} />
+          </div>
+
+          {currentSeason && (
+            <Card
+              title={`${currentSeasonLabel} season`}
+              subtitle="Live FPL totals for the current campaign"
+            >
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Stat
+                  label="Total pts"
+                  value={String(currentSeason.total_points)}
+                  accent
+                />
+                <Stat label="Minutes" value={String(currentSeason.minutes)} />
+                <Stat
+                  label="Goals"
+                  value={String(currentSeason.goals_scored)}
+                />
+                <Stat label="Assists" value={String(currentSeason.assists)} />
+                <Stat
+                  label="Clean sheets"
+                  value={String(currentSeason.clean_sheets ?? 0)}
+                />
+                <Stat label="Bonus" value={String(currentSeason.bonus ?? 0)} />
+                <Stat label="Form" value={player.form.toFixed(1)} />
+                <Stat
+                  label="xGI (season)"
+                  value={
+                    currentSeason.expected_goal_involvements != null
+                      ? Number(
+                          currentSeason.expected_goal_involvements,
+                        ).toFixed(1)
+                      : "—"
+                  }
+                />
+              </div>
+            </Card>
+          )}
+
+          <VsUpcomingSection clubs={vsUpcoming} />
+        </div>
+      )}
+
+      {tab === "form" && <PlayerProgressSection history={historyFull} />}
+
+      {tab === "seasons" && (
+        <PastSeasonsTable
+          seasons={historyPast}
+          currentSeason={currentSeason}
+        />
+      )}
+
+      {tab === "fixtures" && (
+        <div className="space-y-5">
+          <VsUpcomingSection clubs={vsUpcoming} />
+          <Card title="Upcoming fixtures">
+            <FixtureStrip fixtures={upcoming} />
+            <ul className="mt-4 space-y-2">
+              {upcoming.map((f) => (
+                <li
+                  key={f.id}
+                  className="flex justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
+                >
+                  <span>
+                    GW{f.event ?? "?"} · {f.isHome ? "H" : "A"} {f.opponentName}
+                  </span>
+                  <span className="text-zinc-400">FDR {f.difficulty}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+      )}
+
+      {tab === "history" && (
+        <Card title="Recent gameweeks" subtitle="Last 8 appearances">
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-[11px] uppercase tracking-wider text-zinc-500">
+                <tr>
+                  <th className="px-2 py-1">GW</th>
+                  <th className="px-2 py-1">Opp</th>
+                  <th className="px-2 py-1">Pts</th>
+                  <th className="px-2 py-1">Min</th>
+                  <th className="px-2 py-1">G/A</th>
+                  <th className="px-2 py-1">xGI</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((h) => (
+                  <tr
+                    key={`${h.round}-${h.fixture}`}
+                    className="border-t border-zinc-800"
+                  >
+                    <td className="px-2 py-1.5">{h.round}</td>
+                    <td className="px-2 py-1.5">
+                      {h.was_home ? "vs" : "@"} {h.opponentShort}
+                    </td>
+                    <td className="px-2 py-1.5 font-semibold text-emerald-400">
+                      {h.total_points}
+                    </td>
+                    <td className="px-2 py-1.5">{h.minutes}</td>
+                    <td className="px-2 py-1.5">
+                      {h.goals_scored}/{h.assists}
+                    </td>
+                    <td className="px-2 py-1.5 text-zinc-400">
+                      {(
+                        Number(h.expected_goals) + Number(h.expected_assists)
+                      ).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+                {history.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-4 text-zinc-500">
+                      No history yet this season.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </Card>
       )}
-
-      <VsUpcomingSection clubs={vsUpcoming} />
-
-      <PlayerProgressSection history={historyFull} />
-
-      <PastSeasonsTable
-        seasons={historyPast}
-        currentSeason={currentSeason}
-      />
-
-      <Card title="Upcoming fixtures">
-        <FixtureStrip fixtures={upcoming} />
-        <ul className="mt-4 space-y-2">
-          {upcoming.map((f) => (
-            <li
-              key={f.id}
-              className="flex justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
-            >
-              <span>
-                GW{f.event ?? "?"} · {f.isHome ? "H" : "A"} {f.opponentName}
-              </span>
-              <span className="text-zinc-400">FDR {f.difficulty}</span>
-            </li>
-          ))}
-        </ul>
-      </Card>
-
-      <Card title="Recent gameweeks" subtitle="Last 8 appearances">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="text-[11px] uppercase tracking-wider text-zinc-500">
-              <tr>
-                <th className="px-2 py-1">GW</th>
-                <th className="px-2 py-1">Opp</th>
-                <th className="px-2 py-1">Pts</th>
-                <th className="px-2 py-1">Min</th>
-                <th className="px-2 py-1">G/A</th>
-                <th className="px-2 py-1">xGI</th>
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((h) => (
-                <tr
-                  key={`${h.round}-${h.fixture}`}
-                  className="border-t border-zinc-800"
-                >
-                  <td className="px-2 py-1.5">{h.round}</td>
-                  <td className="px-2 py-1.5">
-                    {h.was_home ? "vs" : "@"} {h.opponentShort}
-                  </td>
-                  <td className="px-2 py-1.5 font-semibold text-emerald-400">
-                    {h.total_points}
-                  </td>
-                  <td className="px-2 py-1.5">{h.minutes}</td>
-                  <td className="px-2 py-1.5">
-                    {h.goals_scored}/{h.assists}
-                  </td>
-                  <td className="px-2 py-1.5 text-zinc-400">
-                    {(
-                      Number(h.expected_goals) + Number(h.expected_assists)
-                    ).toFixed(2)}
-                  </td>
-                </tr>
-              ))}
-              {history.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-2 py-4 text-zinc-500">
-                    No history yet this season.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   );
 }

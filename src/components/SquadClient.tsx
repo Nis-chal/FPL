@@ -1,10 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  AnalysisFilters,
-  SquadBudgetChips,
-} from "@/components/AnalysisFilters";
+import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { BestFormationCard } from "@/components/BestFormationCard";
 import { PitchView } from "@/components/PitchView";
 import { PlayerLink } from "@/components/PlayerDrawer";
@@ -27,7 +24,7 @@ import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
 import { applySquadTransfer, suggestTransfers } from "@/lib/transfers";
 import type { ScoredPlayer, TeamRating, TransferSuggestion } from "@/lib/types";
-import { formatPrice } from "@/lib/utils";
+import { BUDGET, formatPrice } from "@/lib/utils";
 
 type LineupState = {
   startingXi: ScoredPlayer[];
@@ -91,8 +88,6 @@ export function SquadClient({
     resetFilters,
     horizon,
     setHorizon,
-    budget,
-    setBudget,
     chip,
     setChip,
     formation,
@@ -116,6 +111,7 @@ export function SquadClient({
   const [personalDrawerOpen, setPersonalDrawerOpen] = useState(false);
   const [modelLineup, setModelLineup] = useState<LineupState | null>(null);
   const [personalLineup, setPersonalLineup] = useState<LineupState | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const scored = useMemo(() => {
     const horizonApplied = applyHorizon(
@@ -130,7 +126,7 @@ export function SquadClient({
   const built = useMemo(() => {
     const squad = buildRecommendedSquad(
       scored,
-      budget,
+      BUDGET,
       horizon,
       rankBy,
       chip,
@@ -153,7 +149,7 @@ export function SquadClient({
       captain,
       viceCaptain: vice,
     };
-  }, [scored, rankBy, budget, horizon, seasonBasis, chip, formation]);
+  }, [scored, rankBy, horizon, seasonBasis, chip, formation]);
 
   const formations = useMemo(() => rankFormations(scored), [scored]);
 
@@ -173,9 +169,9 @@ export function SquadClient({
     setModelRemovedId(null);
     setModelDrawerOpen(false);
     setSwapHint(
-      `Rebuilt for ${formatPrice(budget)} budget · ${formatPrice(built.bank)} bank — × to transfer, or tap pitch ↔ bench to swap`,
+      `Rebuilt for ${formatPrice(BUDGET)} budget · ${formatPrice(built.bank)} bank — × to transfer, or tap pitch ↔ bench to swap`,
     );
-  }, [built, budget]);
+  }, [built]);
 
   // Keep player stats in sync with horizon when IDs unchanged
   useEffect(() => {
@@ -198,7 +194,7 @@ export function SquadClient({
     () => modelSquad.reduce((sum, p) => sum + p.price, 0),
     [modelSquad],
   );
-  const modelBank = budget - modelTotalCost;
+  const modelBank = BUDGET - modelTotalCost;
 
   const modelRating = useMemo(
     () => rateTeam(modelSquad, activeModel.startingXi, horizon),
@@ -280,7 +276,7 @@ export function SquadClient({
         lineup.bench,
         outId,
         inPlayer,
-        budget,
+        BUDGET,
       );
       if (!result.ok) {
         setSwapHint(result.error);
@@ -301,7 +297,7 @@ export function SquadClient({
         `Transferred in ${inPlayer.webName} · ${formatPrice(result.totalCost)} spent · ${formatPrice(result.bank)} bank`,
       );
     },
-    [budget],
+    [],
   );
 
   const clearModelSlot = useCallback(() => {
@@ -410,7 +406,7 @@ export function SquadClient({
     ? personalSquad.find((p) => p.id === personalRemovedId) ?? null
     : null;
   const personalTotalCost = personalSquad.reduce((sum, p) => sum + p.price, 0);
-  const personalBank = budget - personalTotalCost;
+  const personalBank = BUDGET - personalTotalCost;
 
   const personalSuggestions = useMemo(() => {
     if (!personalLineup || personalSquad.length === 0) return [];
@@ -436,7 +432,7 @@ export function SquadClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="min-w-0 flex-1">
           <AnalysisFilters
             horizon={horizon}
             onHorizonChange={setHorizon}
@@ -447,51 +443,15 @@ export function SquadClient({
             onReset={resetFilters}
             priceBounds={priceBounds}
             onPriceBoundsChange={setPriceBounds}
-            budget={budget}
-            onBudgetChange={setBudget}
             chip={chip}
             onChipChange={setChip}
             formation={formation}
             onFormationChange={setFormation}
           />
-          <SquadBudgetChips budget={budget} onChange={setBudget} />
         </div>
         <div className="w-full max-w-md">
           <TeamIdForm compact />
         </div>
-      </div>
-
-      {livePersonalRating ? (
-        <TeamRatingCard rating={livePersonalRating} />
-      ) : (
-        <TeamRatingCard rating={modelRating} />
-      )}
-
-      <BestFormationCard formations={formations} horizon={horizon} />
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label={formation === "auto" ? "Best formation" : "Locked formation"}
-          value={
-            formation !== "auto"
-              ? formation
-              : (formations[0]?.name ?? formationFromXi(activeModel.startingXi))
-          }
-          accent
-        />
-        <Stat
-          label={`Squad / ${formatPrice(budget)}`}
-          value={`${formatPrice(modelTotalCost)} · ${formatPrice(modelBank)} bank`}
-        />
-        <Stat
-          label={`XI pts (next ${horizon})`}
-          value={modelTotal.toFixed(1)}
-          accent
-        />
-        <Stat
-          label="Overall rating"
-          value={`${modelRating.grade} ${modelRating.score}`}
-        />
       </div>
 
       {swapHint && (
@@ -501,8 +461,8 @@ export function SquadClient({
       )}
 
       <Card
-        title="Recommended squad (customize)"
-        subtitle={`× removes a player, then tap the empty slot for transfers (price + xPts filters). Pitch ↔ bench to swap. Next ${horizon} · ${formatPrice(budget)}`}
+        title="Recommended squad"
+        subtitle={`£100.0m · × removes · tap empty slot to transfer · pitch ↔ bench swap · next ${horizon}`}
       >
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-xs uppercase tracking-wider text-zinc-500">
@@ -529,6 +489,10 @@ export function SquadClient({
                 }
               />
             </span>
+          </span>
+          <span className="ml-auto text-xs text-zinc-500">
+            {formatPrice(modelTotalCost)} / {formatPrice(BUDGET)} ·{" "}
+            {modelTotal.toFixed(1)} XI pts
           </span>
         </div>
 
@@ -575,12 +539,85 @@ export function SquadClient({
         />
       </Card>
 
+      <section className="rounded-2xl border border-zinc-800 bg-zinc-900/40">
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((v) => !v)}
+          aria-expanded={detailsOpen}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-zinc-900/80 md:px-5"
+        >
+          <div>
+            <h2 className="text-base font-bold text-zinc-100">View details</h2>
+            <p className="text-xs text-zinc-500">
+              {detailsOpen
+                ? "Rating, formation ranks, and squad stats"
+                : `${modelRating.grade} ${modelRating.score} · ${
+                    formation !== "auto"
+                      ? formation
+                      : (formations[0]?.name ??
+                        formationFromXi(activeModel.startingXi))
+                  } · ${formatPrice(modelBank)} bank`}
+            </p>
+          </div>
+          <span
+            className={[
+              "text-zinc-400 transition-transform",
+              detailsOpen ? "rotate-180" : "",
+            ].join(" ")}
+            aria-hidden
+          >
+            ▾
+          </span>
+        </button>
+        {detailsOpen && (
+          <div className="space-y-4 border-t border-zinc-800 px-4 py-4 md:px-5">
+            {livePersonalRating ? (
+              <TeamRatingCard rating={livePersonalRating} />
+            ) : (
+              <TeamRatingCard rating={modelRating} />
+            )}
+            <BestFormationCard
+              formations={formations}
+              horizon={horizon}
+              defaultOpen
+            />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat
+                label={
+                  formation === "auto" ? "Best formation" : "Locked formation"
+                }
+                value={
+                  formation !== "auto"
+                    ? formation
+                    : (formations[0]?.name ??
+                      formationFromXi(activeModel.startingXi))
+                }
+                accent
+              />
+              <Stat
+                label={`Squad / ${formatPrice(BUDGET)}`}
+                value={`${formatPrice(modelTotalCost)} · ${formatPrice(modelBank)} bank`}
+              />
+              <Stat
+                label={`XI pts (next ${horizon})`}
+                value={modelTotal.toFixed(1)}
+                accent
+              />
+              <Stat
+                label="Overall rating"
+                value={`${modelRating.grade} ${modelRating.score}`}
+              />
+            </div>
+          </div>
+        )}
+      </section>
+
       {modelOut && modelDrawerOpen && (
         <SquadTransferDrawer
           out={modelOut}
           squad={modelSquad}
           pool={scored}
-          budget={budget}
+          budget={BUDGET}
           onClose={() => {
             setModelDrawerOpen(false);
             setSwapHint(
@@ -609,7 +646,7 @@ export function SquadClient({
           title={`Your FPL squad${entryName ? ` · ${entryName}` : ""}`}
           subtitle={
             personalTotal != null
-              ? `Projected ${personalTotal.toFixed(1)} pts · ${formatPrice(personalTotalCost)} / ${formatPrice(budget)} · × removes a player, then tap the empty slot for transfers`
+              ? `Projected ${personalTotal.toFixed(1)} pts · ${formatPrice(personalTotalCost)} / ${formatPrice(BUDGET)} · × removes a player, then tap the empty slot for transfers`
               : "× remove · tap empty slot for transfer list"
           }
         >
@@ -729,7 +766,7 @@ export function SquadClient({
           out={personalOut}
           squad={personalSquad}
           pool={scored}
-          budget={budget}
+          budget={BUDGET}
           onClose={() => {
             setPersonalDrawerOpen(false);
             setSwapHint(

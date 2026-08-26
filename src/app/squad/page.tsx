@@ -12,10 +12,10 @@ export default async function SquadPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-50">Best squad</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Build a 15 under your budget (max £100.0m). Press × on a player to
-            remove them, then tap the empty slot to open the transfer drawer
-            (filter by price and xPts). Suggested transfers for your FPL team
-            appear in a row under your squad.
+            Build a £100.0m XV. Press × on a player to remove them, then tap the
+            empty slot for transfers. Open View details for rating and
+            formation ranks. Suggested transfers for your FPL team appear under
+            your squad.
           </p>
         </div>
         <SquadClient allPlayers={insights.scored} initialHorizon={5} />

@@ -53,12 +53,55 @@ export function formatPrice(nowCost: number): string {
   return `£${priceToMillions(nowCost).toFixed(1)}m`;
 }
 
+/**
+ * Active / latest gameweek for the app.
+ * FPL often leaves a *finished* GW as `is_current` until the next deadline;
+ * in that window we roll forward to `is_next` so the UI stays on the latest week.
+ */
 export function getCurrentEvent(events: FplEvent[]): FplEvent | undefined {
-  return events.find((e) => e.is_current) ?? events.find((e) => e.is_next);
+  if (!events.length) return undefined;
+
+  const markedCurrent = events.find((e) => e.is_current);
+  const markedNext = events.find((e) => e.is_next);
+
+  // In-progress or upcoming-as-current
+  if (markedCurrent && !markedCurrent.finished) return markedCurrent;
+
+  // Between GWs: finished GW still flagged current → use next
+  if (markedCurrent?.finished && markedNext) return markedNext;
+
+  if (markedNext && !markedNext.finished) return markedNext;
+  if (markedCurrent) return markedCurrent;
+
+  const now = Date.now();
+  const openPastDeadline = [...events]
+    .filter(
+      (e) =>
+        !e.finished &&
+        Number.isFinite(Date.parse(e.deadline_time)) &&
+        Date.parse(e.deadline_time) <= now,
+    )
+    .sort((a, b) => b.id - a.id)[0];
+  if (openPastDeadline) return openPastDeadline;
+
+  const soonestOpen = [...events]
+    .filter((e) => !e.finished)
+    .sort((a, b) => a.id - b.id)[0];
+  if (soonestOpen) return soonestOpen;
+
+  return [...events].sort((a, b) => b.id - a.id)[0];
 }
 
+/** Gameweek after the active one (for “next” fixtures / deadlines). */
 export function getNextEvent(events: FplEvent[]): FplEvent | undefined {
-  return events.find((e) => e.is_next) ?? events.find((e) => e.is_current);
+  const current = getCurrentEvent(events);
+  if (!current) {
+    return events.find((e) => e.is_next) ?? events.find((e) => !e.finished);
+  }
+  return (
+    events.find((e) => e.id > current.id && !e.finished) ??
+    events.find((e) => e.id === current.id + 1)
+  );
 }
 
 export function teamMap(teams: FplTeam[]): Map<number, FplTeam> {

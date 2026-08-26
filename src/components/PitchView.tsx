@@ -22,7 +22,7 @@ function EmptySlot({
   onRestore: () => void;
 }) {
   return (
-    <div className="relative flex w-[4.75rem] flex-col items-center sm:w-[5.5rem]">
+    <div className="relative flex h-[7.75rem] w-[4.75rem] shrink-0 flex-col items-center sm:h-[8.25rem] sm:w-[5.5rem]">
       <button
         type="button"
         onClick={onRestore}
@@ -35,10 +35,10 @@ function EmptySlot({
       <button
         type="button"
         onClick={onFill}
-        className="flex min-h-[6.5rem] w-full flex-col items-center justify-center rounded-xl border border-dashed border-rose-400/70 bg-rose-500/10 px-1 py-2 text-center transition hover:border-rose-300 hover:bg-rose-500/20"
+        className="flex h-full w-full flex-col items-center justify-center rounded-xl border border-dashed border-rose-400/70 bg-rose-500/10 px-1 text-center transition hover:border-rose-300 hover:bg-rose-500/20"
       >
-        <span className="text-lg font-bold text-rose-300">+</span>
-        <span className="mt-1 text-[10px] font-semibold text-rose-200">
+        <span className="text-lg font-bold leading-none text-rose-300">+</span>
+        <span className="mt-1 text-[10px] font-semibold leading-tight text-rose-200">
           Add {position}
         </span>
         <span className="mt-0.5 text-[9px] text-zinc-400">Tap for list</span>
@@ -80,7 +80,7 @@ function PitchPlayerCard({
         }
       }}
       className={[
-        "group relative flex w-[4.75rem] cursor-pointer flex-col items-center rounded-xl border px-1 py-1.5 text-center shadow-lg transition sm:w-[5.5rem]",
+        "group relative flex h-[7.75rem] w-[4.75rem] shrink-0 cursor-pointer flex-col items-center overflow-visible rounded-xl border px-1 pb-1 pt-2 text-center shadow-lg transition sm:h-[8.25rem] sm:w-[5.5rem]",
         selected
           ? "border-amber-400 bg-amber-500/20 ring-2 ring-amber-400/50"
           : "border-emerald-700/60 bg-zinc-950/85 hover:border-emerald-400",
@@ -105,11 +105,11 @@ function PitchPlayerCard({
         {overall}
       </div>
       {(isCaptain || isVice) && (
-        <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-emerald-500 px-1 text-[9px] font-bold text-zinc-950">
+        <span className="absolute left-1/2 top-0 z-10 -translate-x-1/2 -translate-y-1/2 rounded bg-emerald-500 px-1 text-[9px] font-bold leading-none text-zinc-950">
           {isCaptain ? "C" : "VC"}
         </span>
       )}
-      <div className="absolute bottom-8 right-0.5 z-10">
+      <div className="pointer-events-none absolute right-0.5 top-6 z-10">
         <AvailabilityBadge
           status={player.status}
           chanceOfPlaying={player.chanceOfPlaying}
@@ -117,31 +117,31 @@ function PitchPlayerCard({
           compact
         />
       </div>
-      <ClubKit
-        teamCode={player.teamCode}
-        teamShort={player.teamShort}
-        position={player.position}
-        preferJersey
-        className="h-8 w-8 object-contain sm:h-9 sm:w-9"
-      />
-      <div className="mt-1 w-full truncate text-[10px] font-bold text-zinc-50 sm:text-[11px]">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center sm:h-10 sm:w-10">
+        <ClubKit
+          teamCode={player.teamCode}
+          teamShort={player.teamShort}
+          position={player.position}
+          preferJersey
+          className="h-full w-full object-contain"
+        />
+      </div>
+      <div className="mt-1 line-clamp-1 w-full px-0.5 text-[10px] font-bold leading-tight text-zinc-50 sm:text-[11px]">
         {player.webName}
       </div>
-      <div className="text-[10px] font-semibold text-emerald-300 sm:text-[11px]">
-        {pts.toFixed(1)} xPts
-        {player.livePoints != null && player.livePoints > 0 && (
-          <span className="ml-0.5 text-[9px] text-amber-300">
-            ({player.livePoints})
-          </span>
-        )}
+      <div className="mt-0.5 flex h-4 w-full items-center justify-center gap-0.5 text-[10px] font-semibold leading-none text-emerald-300 sm:text-[11px]">
+        <span>{pts.toFixed(1)}</span>
+        {player.livePoints != null && player.livePoints > 0 ? (
+          <span className="text-[9px] text-amber-300">({player.livePoints})</span>
+        ) : null}
       </div>
-      <div className="text-[9px] text-zinc-400">
-        {Math.round(player.startChance * 100)}% start ·{" "}
+      <div className="mt-auto w-full truncate px-0.5 text-[9px] leading-tight text-zinc-400">
+        {Math.round(player.startChance * 100)}% ·{" "}
         {player.expectedPointsPerGw.toFixed(1)}/GW
       </div>
       <PlayerLink
         playerId={player.id}
-        className="mt-0.5 text-[9px] text-zinc-500 underline-offset-2 hover:text-emerald-400 hover:underline"
+        className="mt-0.5 h-3 text-[9px] leading-none text-zinc-500 underline-offset-2 hover:text-emerald-400 hover:underline"
       >
         info
       </PlayerLink>
@@ -173,7 +173,7 @@ function PitchRow({
   horizon: number;
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-stretch justify-center gap-2 sm:gap-3">
       {players.map((p) =>
         removedId === p.id && onFillSlot && onRestoreSlot ? (
           <EmptySlot

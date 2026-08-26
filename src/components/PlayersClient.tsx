@@ -29,8 +29,6 @@ export function PlayersClient({
     resetFilters,
     horizon,
     setHorizon,
-    budget,
-    setBudget,
     chip,
     setChip,
     formation,
@@ -71,8 +69,6 @@ export function PlayersClient({
         onReset={resetFilters}
         priceBounds={priceBounds}
         onPriceBoundsChange={setPriceBounds}
-        budget={budget}
-        onBudgetChange={setBudget}
         chip={chip}
         onChipChange={setChip}
         formation={formation}

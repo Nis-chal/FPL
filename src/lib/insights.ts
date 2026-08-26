@@ -5,6 +5,7 @@ import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
 import { bestInboundTargets, suggestTransfers } from "@/lib/transfers";
 import { rateTeam } from "@/lib/team-rating";
+import { sortSeasonsLatestFirst } from "@/lib/season-sort";
 import type { PastSeasonStats, ScoredPlayer } from "@/lib/types";
 import {
   getCurrentEvent,
@@ -254,7 +255,7 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
       opponentScore: null,
       result: null as null,
     })),
-    historyPast: [...summary.history_past].slice(0, 5),
+    historyPast: sortSeasonsLatestFirst([...summary.history_past]).slice(0, 5),
     currentSeason,
     currentSeasonLabel,
     vsUpcoming: buildVsUpcomingClubs(upcomingFixtures, historyFull, {

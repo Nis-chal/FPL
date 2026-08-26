@@ -16,12 +16,6 @@ import {
 import type { SeasonBasis } from "@/lib/season-basis";
 import type { PriceBounds, RankBy } from "@/lib/types";
 import {
-  BUDGET,
-  BUDGET_MIN,
-  BUDGET_PRESETS,
-  formatPrice,
-} from "@/lib/utils";
-import {
   FORMATION_PREFERENCE_OPTIONS,
   formationPreferenceLabel,
   type FormationPreference,
@@ -176,96 +170,6 @@ function isOverallOnly(rankBy: RankBy[]): boolean {
   return rankBy.length === 1 && rankBy[0] === "overall";
 }
 
-function SquadBudgetControl({
-  budget,
-  onChange,
-}: {
-  budget: number;
-  onChange: (budget: number) => void;
-}) {
-  return (
-    <section>
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-          Squad budget
-        </h3>
-        <span className="text-sm font-bold text-emerald-400">
-          {formatPrice(budget)}
-        </span>
-      </div>
-      <p className="mt-1 text-[11px] text-zinc-500">
-        Max £100.0m (FPL limit). Lower it to rebuild a cheaper XV.
-      </p>
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {BUDGET_PRESETS.map((preset) => (
-          <button
-            key={preset}
-            type="button"
-            onClick={() => onChange(preset)}
-            className={[
-              "rounded-lg border px-3 py-1.5 text-sm font-medium transition",
-              budget === preset
-                ? "border-emerald-500 bg-emerald-500 text-zinc-950"
-                : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
-            ].join(" ")}
-          >
-            £{(preset / 10).toFixed(0)}m
-          </button>
-        ))}
-      </div>
-      <label className="mt-3 flex flex-col gap-1.5">
-        <span className="text-[11px] text-zinc-500">
-          Custom (£{(BUDGET_MIN / 10).toFixed(0)}–£{(BUDGET / 10).toFixed(0)}m)
-        </span>
-        <input
-          type="range"
-          min={BUDGET_MIN}
-          max={BUDGET}
-          step={5}
-          value={budget}
-          onChange={(e) => onChange(Number(e.target.value))}
-          className="w-full accent-emerald-500"
-        />
-      </label>
-    </section>
-  );
-}
-
-/** Compact budget presets for squad / home pages (outside the filter drawer). */
-export function SquadBudgetChips({
-  budget,
-  onChange,
-}: {
-  budget: number;
-  onChange: (budget: number) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-        Budget
-      </span>
-      {BUDGET_PRESETS.map((preset) => (
-        <button
-          key={preset}
-          type="button"
-          onClick={() => onChange(preset)}
-          className={[
-            "rounded-lg border px-2.5 py-1 text-xs font-semibold transition",
-            budget === preset
-              ? "border-emerald-500 bg-emerald-500 text-zinc-950"
-              : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
-          ].join(" ")}
-        >
-          £{(preset / 10).toFixed(0)}m
-        </button>
-      ))}
-      <span className="text-xs font-bold text-emerald-400">
-        {formatPrice(budget)}
-      </span>
-    </div>
-  );
-}
-
 function FilterDrawerBody({
   horizon,
   onHorizonChange,
@@ -275,8 +179,6 @@ function FilterDrawerBody({
   onToggleRank,
   priceBounds,
   onPriceBoundsChange,
-  budget,
-  onBudgetChange,
   chip,
   onChipChange,
   formation,
@@ -290,8 +192,6 @@ function FilterDrawerBody({
   onToggleRank: (mode: RankBy) => void;
   priceBounds: PriceBounds;
   onPriceBoundsChange: (bounds: PriceBounds) => void;
-  budget: number;
-  onBudgetChange: (budget: number) => void;
   chip: ChipMode;
   onChipChange: (chip: ChipMode) => void;
   formation: FormationPreference;
@@ -360,8 +260,6 @@ function FilterDrawerBody({
         </p>
       </section>
 
-      <SquadBudgetControl budget={budget} onChange={onBudgetChange} />
-
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
           Player price band
@@ -407,8 +305,6 @@ export function AnalysisFilters({
   onReset,
   priceBounds,
   onPriceBoundsChange,
-  budget,
-  onBudgetChange,
   chip,
   onChipChange,
   formation,
@@ -423,8 +319,6 @@ export function AnalysisFilters({
   onReset?: () => void;
   priceBounds: PriceBounds;
   onPriceBoundsChange: (bounds: PriceBounds) => void;
-  budget: number;
-  onBudgetChange: (budget: number) => void;
   chip: ChipMode;
   onChipChange: (chip: ChipMode) => void;
   formation: FormationPreference;
@@ -452,12 +346,11 @@ export function AnalysisFilters({
   const chipBit = chip !== "none" ? ` · ${chipLabel(chip)}` : "";
   const formationBit =
     formation !== "auto" ? ` · ${formation}` : " · auto XI";
-  const summary = `${rankByLabel(rankBy)}${chipBit}${formationBit} · ${seasonLabel} · next ${horizon} · budget ${formatPrice(budget)} · ${priceSummary(priceBounds)}`;
+  const summary = `${rankByLabel(rankBy)}${chipBit}${formationBit} · ${seasonLabel} · next ${horizon} · ${priceSummary(priceBounds)}`;
   const showReset =
     !isOverallOnly(rankBy) ||
     priceBounds.minPrice != null ||
     priceBounds.maxPrice != null ||
-    budget !== BUDGET ||
     seasonBasis !== "current" ||
     chip !== "none" ||
     formation !== "auto";
@@ -521,7 +414,7 @@ export function AnalysisFilters({
                   Analysis filters
                 </h2>
                 <p className="text-xs text-zinc-500">
-                  Formation, chips, lenses, budget (max £100m)
+                  Formation, chips, lenses (squad £100m)
                 </p>
               </div>
               <button
@@ -542,8 +435,6 @@ export function AnalysisFilters({
                 onToggleRank={onToggleRank}
                 priceBounds={priceBounds}
                 onPriceBoundsChange={onPriceBoundsChange}
-                budget={budget}
-                onBudgetChange={onBudgetChange}
                 chip={chip}
                 onChipChange={onChipChange}
                 formation={formation}

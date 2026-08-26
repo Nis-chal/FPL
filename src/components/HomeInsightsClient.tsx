@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import {
-  AnalysisFilters,
-  SquadBudgetChips,
-} from "@/components/AnalysisFilters";
+import { AnalysisFilters } from "@/components/AnalysisFilters";
 import { BestFormationCard } from "@/components/BestFormationCard";
 import { LiveGwStrip } from "@/components/LiveGwStrip";
 import { PlayerTable, Reasons } from "@/components/PlayerTable";
@@ -22,7 +19,7 @@ import {
 import { applyHorizon, topProjected } from "@/lib/scoring";
 import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import type { FplEvent, ScoredPlayer } from "@/lib/types";
-import { formatPrice } from "@/lib/utils";
+import { BUDGET, formatPrice } from "@/lib/utils";
 
 export function HomeInsightsClient({
   allPlayers,
@@ -41,8 +38,6 @@ export function HomeInsightsClient({
     resetFilters,
     horizon,
     setHorizon,
-    budget,
-    setBudget,
     chip,
     setChip,
     formation,
@@ -59,8 +54,8 @@ export function HomeInsightsClient({
 
   const bestSquad = useMemo(
     () =>
-      buildRecommendedSquad(scored, budget, horizon, rankBy, chip, formation),
-    [scored, budget, horizon, rankBy, chip, formation],
+      buildRecommendedSquad(scored, BUDGET, horizon, rankBy, chip, formation),
+    [scored, horizon, rankBy, chip, formation],
   );
   const formations = useMemo(() => rankFormations(scored), [scored]);
   const topScorers = topProjected(scored, 12, {
@@ -87,8 +82,6 @@ export function HomeInsightsClient({
           onReset={resetFilters}
           priceBounds={priceBounds}
           onPriceBoundsChange={setPriceBounds}
-          budget={budget}
-          onBudgetChange={setBudget}
           chip={chip}
           onChipChange={setChip}
           formation={formation}
@@ -98,7 +91,6 @@ export function HomeInsightsClient({
           <TeamIdForm compact />
         </div>
       </div>
-      <SquadBudgetChips budget={budget} onChange={setBudget} />
     </div>
   );
 
@@ -122,7 +114,28 @@ export function HomeInsightsClient({
       {filters}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Current GW" value={currentEvent?.name ?? "—"} />
+        <Stat
+          label="Current GW"
+          value={currentEvent?.name ?? "—"}
+          accent
+          tip={
+            <div className="space-y-1 text-xs text-zinc-300">
+              <p>
+                Latest active FPL gameweek (rolls forward when the previous GW
+                is finished).
+              </p>
+              {currentEvent?.deadline_time && (
+                <p className="text-zinc-400">
+                  Deadline{" "}
+                  {new Date(currentEvent.deadline_time).toLocaleString()}
+                </p>
+              )}
+              {nextEvent && (
+                <p className="text-zinc-500">Next: {nextEvent.name}</p>
+              )}
+            </div>
+          }
+        />
         <Stat
           label="Captain pick"
           value={captainPick.webName}
@@ -150,7 +163,7 @@ export function HomeInsightsClient({
           accent
         />
         <Stat
-          label={`Budget ${formatPrice(budget)}`}
+          label={`Budget ${formatPrice(BUDGET)}`}
           value={`${formatPrice(bestSquad.totalCost)} · ${formatPrice(bestSquad.bank)} left`}
         />
       </div>
