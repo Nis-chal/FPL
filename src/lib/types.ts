@@ -375,6 +375,8 @@ export interface ScoredPlayer {
 export interface ApiFootballExtras {
   source: "api-football";
   apiPlayerId: number;
+  /** Season start year used for this snapshot (e.g. 2024). */
+  season: number;
   photo: string | null;
   rating: number | null;
   appearances: number | null;

@@ -234,7 +234,7 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
           {player.extras && (
             <Card
               title="Match stats"
-              subtitle="Premier League season · API-Football"
+              subtitle={`Premier League ${player.extras.season}/${String(player.extras.season + 1).slice(-2)} · API-Football`}
             >
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Stat

@@ -14,7 +14,8 @@ export default async function PlayersPage() {
           <p className="mt-2 text-sm text-zinc-400">
             Search and filter by position or club. Sorted by expected points.
             When API-Football is configured, lists also show shots (on/total) and
-            rating.
+            rating (free plan uses the newest season your key can access, often
+            2024/25).
           </p>
         </div>
         <PlayersClient
