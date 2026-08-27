@@ -14,7 +14,20 @@ type SortKey =
   | "expectedPointsPerGw"
   | "price"
   | "startChance"
-  | "xgi90";
+  | "xgi90"
+  | "shotsTotal";
+
+function shotsSortValue(p: ScoredPlayer): number {
+  return p.extras?.shotsTotal ?? -1;
+}
+
+function formatShots(p: ScoredPlayer): string {
+  const e = p.extras;
+  if (!e || (e.shotsTotal == null && e.shotsOn == null)) return "—";
+  const on = e.shotsOn ?? "–";
+  const tot = e.shotsTotal ?? "–";
+  return `${on}/${tot}`;
+}
 
 function SortHeader({
   label,
@@ -108,6 +121,14 @@ export function PlayerRow({
           {player.projectedPoints.toFixed(1)} horizon
         </div>
       </td>
+      <td className="px-3 py-2 text-sm tabular-nums text-zinc-300">
+        {formatShots(player)}
+        {player.extras?.rating != null && (
+          <div className="text-[10px] text-zinc-500">
+            rtg {player.extras.rating.toFixed(1)}
+          </div>
+        )}
+      </td>
       {showThreat && (
         <>
           <td className="px-3 py-2 text-sm text-zinc-300">
@@ -166,6 +187,12 @@ export function PlayerTable({
     if (sortKey === "default") return players;
     const mult = sortDir === "desc" ? -1 : 1;
     return [...players].sort((a, b) => {
+      if (sortKey === "shotsTotal") {
+        const av = shotsSortValue(a);
+        const bv = shotsSortValue(b);
+        if (av === bv) return b.totalPoints - a.totalPoints;
+        return (av < bv ? -1 : 1) * mult;
+      }
       const av = a[sortKey];
       const bv = b[sortKey];
       if (av === bv) return b.totalPoints - a.totalPoints;
@@ -203,6 +230,12 @@ export function PlayerTable({
               active={sortKey === "expectedPointsPerGw"}
               dir={sortDir}
               onClick={() => toggleSort("expectedPointsPerGw")}
+            />
+            <SortHeader
+              label="Shots"
+              active={sortKey === "shotsTotal"}
+              dir={sortDir}
+              onClick={() => toggleSort("shotsTotal")}
             />
             {showThreat && (
               <>

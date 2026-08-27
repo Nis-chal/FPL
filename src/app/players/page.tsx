@@ -12,8 +12,9 @@ export default async function PlayersPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-50">Players</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Search and filter by position or club. Sorted by expected points
-            (start chance × underlying attack × fixtures) — not past points alone.
+            Search and filter by position or club. Sorted by expected points.
+            When API-Football is configured, lists also show shots (on/total) and
+            rating.
           </p>
         </div>
         <PlayersClient

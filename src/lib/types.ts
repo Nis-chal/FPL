@@ -367,6 +367,33 @@ export interface ScoredPlayer {
   /** FPL official expected points next GW, if present. */
   epNext: number | null;
   reasons: string[];
+  /** Optional season extras from API-Football (shots, rating, etc.). */
+  extras?: ApiFootballExtras | null;
+}
+
+/** Season stats from API-Football (Premier League), when configured. */
+export interface ApiFootballExtras {
+  source: "api-football";
+  apiPlayerId: number;
+  photo: string | null;
+  rating: number | null;
+  appearances: number | null;
+  minutes: number | null;
+  shotsTotal: number | null;
+  shotsOn: number | null;
+  keyPasses: number | null;
+  passAccuracy: number | null;
+  tackles: number | null;
+  interceptions: number | null;
+  blocks: number | null;
+  dribblesAttempted: number | null;
+  dribblesSuccess: number | null;
+  foulsDrawn: number | null;
+  foulsCommitted: number | null;
+  yellowCards: number | null;
+  redCards: number | null;
+  goals: number | null;
+  assists: number | null;
 }
 
 export interface TransferSuggestion {

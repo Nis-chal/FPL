@@ -21,7 +21,14 @@ Suggestions maximise **expected points (xPts)**. Toggle **accumulated points** o
 
 Unofficial public Fantasy Premier League API (`fantasy.premierleague.com/api/...`), fetched server-side with caching. Not affiliated with the Premier League or FPL.
 
-If the API returns **403 Forbidden** (common on some networks / cloud hosts), the server retries with browser-like headers and falls back to `curl`. You can also set an optional proxy base:
+Optional **[API-Football](https://www.api-football.com/documentation-v3)** enrichment (shots on/total, rating, key passes, tackles, dribbles, cards) on player lists and detail when `API_FOOTBALL_KEY` is set. Stats are cached ~6 hours to respect free-tier limits.
+
+```bash
+# .env.local
+API_FOOTBALL_KEY=your_apisports_key
+```
+
+If the FPL API returns **403 Forbidden** (common on some networks / cloud hosts), the server retries with browser-like headers and falls back to `curl`. You can also set an optional proxy base:
 
 ```bash
 # .env.local — URL that forwards to fantasy.premierleague.com/api

@@ -231,6 +231,111 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
             </Card>
           )}
 
+          {player.extras && (
+            <Card
+              title="Match stats"
+              subtitle="Premier League season · API-Football"
+            >
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <Stat
+                  label="Shots (on/tot)"
+                  value={
+                    player.extras.shotsOn != null ||
+                    player.extras.shotsTotal != null
+                      ? `${player.extras.shotsOn ?? "–"}/${player.extras.shotsTotal ?? "–"}`
+                      : "—"
+                  }
+                  accent
+                />
+                <Stat
+                  label="Key passes"
+                  value={
+                    player.extras.keyPasses != null
+                      ? String(player.extras.keyPasses)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Pass acc %"
+                  value={
+                    player.extras.passAccuracy != null
+                      ? String(player.extras.passAccuracy)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Rating"
+                  value={
+                    player.extras.rating != null
+                      ? player.extras.rating.toFixed(2)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Tackles"
+                  value={
+                    player.extras.tackles != null
+                      ? String(player.extras.tackles)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Interceptions"
+                  value={
+                    player.extras.interceptions != null
+                      ? String(player.extras.interceptions)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Dribbles OK"
+                  value={
+                    player.extras.dribblesSuccess != null ||
+                    player.extras.dribblesAttempted != null
+                      ? `${player.extras.dribblesSuccess ?? "–"}/${player.extras.dribblesAttempted ?? "–"}`
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Apps / min"
+                  value={
+                    player.extras.appearances != null
+                      ? `${player.extras.appearances} · ${player.extras.minutes ?? "–"}'`
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Goals (AF)"
+                  value={
+                    player.extras.goals != null
+                      ? String(player.extras.goals)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Assists (AF)"
+                  value={
+                    player.extras.assists != null
+                      ? String(player.extras.assists)
+                      : "—"
+                  }
+                />
+                <Stat
+                  label="Yellow / red"
+                  value={`${player.extras.yellowCards ?? 0} / ${player.extras.redCards ?? 0}`}
+                />
+                <Stat
+                  label="Fouls drawn"
+                  value={
+                    player.extras.foulsDrawn != null
+                      ? String(player.extras.foulsDrawn)
+                      : "—"
+                  }
+                />
+              </div>
+            </Card>
+          )}
+
           <VsUpcomingSection clubs={vsUpcoming} />
         </div>
       )}

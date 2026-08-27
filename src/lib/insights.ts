@@ -1,4 +1,9 @@
 import { getBootstrap, getEntry, getEntryPicks, getFixtures } from "@/lib/fpl-client";
+import {
+  apiFootballSeasonYear,
+  enrichPlayersWithApiFootball,
+  getApiFootballExtrasForPlayer,
+} from "@/lib/api-football";
 import { buildVsUpcomingClubs } from "@/lib/opponent-history";
 import { pickCaptain } from "@/lib/ranking";
 import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
@@ -16,12 +21,25 @@ import {
   teamMap,
 } from "@/lib/utils";
 
+function seasonFromEvent(
+  event: { deadline_time: string } | null | undefined,
+): number {
+  if (!event?.deadline_time) return apiFootballSeasonYear();
+  return apiFootballSeasonYear(new Date(event.deadline_time));
+}
+
 export async function getLeagueInsights(horizon = 5, includeAccumulated = true) {
   const [bootstrap, fixtures] = await Promise.all([
     getBootstrap(),
     getFixtures(),
   ]);
-  const scored = scorePlayers(bootstrap, fixtures, horizon, includeAccumulated);
+  const currentEvent = getCurrentEvent(bootstrap.events) ?? null;
+  const nextEvent = getNextEvent(bootstrap.events) ?? null;
+  let scored = scorePlayers(bootstrap, fixtures, horizon, includeAccumulated);
+  scored = await enrichPlayersWithApiFootball(
+    scored,
+    seasonFromEvent(currentEvent),
+  );
   const bestSquad = buildBestSquad(scored);
   const topScorers = topProjected(scored, 12, {
     minMinutes: 1,
@@ -31,8 +49,6 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
   const captainPick =
     pickCaptain(scored, ["overall"]) ?? topScorers[0] ?? bestSquad.captain;
   const transferTargets = bestInboundTargets(scored, 20);
-  const currentEvent = getCurrentEvent(bootstrap.events) ?? null;
-  const nextEvent = getNextEvent(bootstrap.events) ?? null;
   const modelRating = rateTeam(
     bestSquad.squad,
     bestSquad.startingXi,
@@ -66,8 +82,13 @@ export async function getClubDetail(teamId: number, horizon = 5) {
   const teams = teamMap(bootstrap.teams);
   const upcoming = nextFixturesForTeam(fixtures, teamId, teams, 7);
   const recent = recentFixturesForTeam(fixtures, teamId, teams, 7);
-  const scored = scorePlayers(bootstrap, fixtures, horizon).filter(
+  let scored = scorePlayers(bootstrap, fixtures, horizon).filter(
     (p) => p.teamId === teamId,
+  );
+  const current = getCurrentEvent(bootstrap.events);
+  scored = await enrichPlayersWithApiFootball(
+    scored,
+    seasonFromEvent(current),
   );
 
   const news = scored
@@ -122,6 +143,17 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
   const scored = scorePlayers(bootstrap, fixtures, horizon);
   let player = scored.find((p) => p.id === playerId);
   if (!player) return null;
+
+  const currentEv = getCurrentEvent(bootstrap.events);
+  const extras =
+    player.extras ??
+    (await getApiFootballExtrasForPlayer(
+      player,
+      seasonFromEvent(currentEv),
+    ));
+  if (extras) {
+    player = { ...player, extras };
+  }
 
   const teams = teamMap(bootstrap.teams);
   const historyFull = [...summary.history]
@@ -287,7 +319,11 @@ export async function getEntryInsights(
   }
 
   const scoredBase = scorePlayers(bootstrap, fixtures, horizon, includeAccumulated);
-  const scored = applyHorizon(scoredBase, horizon, includeAccumulated);
+  let scored = applyHorizon(scoredBase, horizon, includeAccumulated);
+  scored = await enrichPlayersWithApiFootball(
+    scored,
+    seasonFromEvent(getCurrentEvent(bootstrap.events)),
+  );
   const byId = new Map(scored.map((p) => [p.id, p]));
   const squad = picks.picks
     .map((pick) => byId.get(pick.element))
