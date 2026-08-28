@@ -317,10 +317,40 @@ export function scorePlayers(
   includeAccumulated = true,
 ): ScoredPlayer[] {
   const teams = teamMap(bootstrap.teams);
-  return bootstrap.elements
+  const scored = bootstrap.elements
     .filter((el) => el.element_type >= 1 && el.element_type <= 4)
-    .map((el) => scoreOne(el, fixtures, teams, horizon, includeAccumulated))
-    .sort((a, b) => b.projectedPoints - a.projectedPoints);
+    .map((el) => scoreOne(el, fixtures, teams, horizon, includeAccumulated));
+  return adjustGoalkeeperStartChances(scored).sort(
+    (a, b) => b.projectedPoints - a.projectedPoints,
+  );
+}
+
+/** Backup keepers share a team — scale start chance by minutes vs the #1. */
+export function adjustGoalkeeperStartChances(
+  players: ScoredPlayer[],
+): ScoredPlayer[] {
+  const byTeam = new Map<number, ScoredPlayer[]>();
+  for (const p of players) {
+    if (p.position !== "GKP") continue;
+    const list = byTeam.get(p.teamId) ?? [];
+    list.push(p);
+    byTeam.set(p.teamId, list);
+  }
+
+  const nextStart = new Map<number, number>();
+  for (const gks of byTeam.values()) {
+    const maxMinutes = Math.max(0, ...gks.map((g) => g.minutes));
+    for (const g of gks) {
+      if (maxMinutes <= 0) continue;
+      const share = g.minutes / maxMinutes;
+      const scaled = g.startChance * (0.12 + 0.88 * share);
+      nextStart.set(g.id, Number(Math.max(0.05, Math.min(1, scaled)).toFixed(3)));
+    }
+  }
+
+  return players.map((p) =>
+    nextStart.has(p.id) ? { ...p, startChance: nextStart.get(p.id)! } : p,
+  );
 }
 
 export function topProjected(

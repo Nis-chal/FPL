@@ -5,6 +5,11 @@ import {
   type ChipMode,
 } from "@/lib/chips";
 import {
+  isOutfieldCaptainCandidate,
+  pickOutfieldCaptain,
+  pickOutfieldViceCaptain,
+} from "@/lib/squad-eligibility";
+import {
   currentSeasonScore,
   priorSeasonScore,
   type SeasonBasis,
@@ -349,7 +354,7 @@ export function sortByRank(
   });
 }
 
-/** Captain pick respects active rank modes among likely starters. */
+/** Captain pick respects active rank modes among likely starters (MID/FWD only). */
 export function pickCaptain(
   players: ScoredPlayer[],
   rankBy: RankBy | RankBy[],
@@ -357,18 +362,36 @@ export function pickCaptain(
   chip: ChipMode = "none",
 ): ScoredPlayer | undefined {
   const chipCap = pickChipCaptain(players, chip);
-  if (chipCap) return chipCap;
+  if (chipCap && isOutfieldCaptainCandidate(chipCap)) return chipCap;
 
   const pool = players.filter(
-    (p) => p.startChance >= 0.5 && p.availabilityFactor >= 0.5,
+    (p) =>
+      isOutfieldCaptainCandidate(p) &&
+      p.startChance >= 0.5 &&
+      p.availabilityFactor >= 0.5,
   );
   const ranked = sortByRank(
-    pool.length > 0 ? pool : players,
+    pool.length > 0 ? pool : players.filter(isOutfieldCaptainCandidate),
     rankBy,
     seasonBasis,
     chip,
   );
   return ranked[0];
+}
+
+/** Vice captain — next-best outfield starter after captain. */
+export function pickViceCaptain(
+  players: ScoredPlayer[],
+  captain: ScoredPlayer,
+  rankBy: RankBy | RankBy[],
+  seasonBasis: SeasonBasis = "current",
+  chip: ChipMode = "none",
+): ScoredPlayer | undefined {
+  const rest = players.filter((p) => p.id !== captain.id);
+  return (
+    pickCaptain(rest, rankBy, seasonBasis, chip) ??
+    pickOutfieldViceCaptain(rest, captain, (p) => p.projectedPoints)
+  );
 }
 
 /** Re-export type for consumers that only import ranking helpers. */

@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCached, setCached, withCache } from "@/lib/cache";
+import { getCached, setCached, withCache, withCacheStaleFallback } from "@/lib/cache";
 import type {
   BootstrapStatic,
   ElementSummary,
@@ -23,6 +23,45 @@ const ACTIVE_TTL = 75 * 1000;
 const IDLE_TTL = 4 * 60 * 1000;
 const SUMMARY_TTL = 5 * 60 * 1000;
 const ENTRY_TTL = 5 * 60 * 1000;
+/** Serve last-known team data during FPL maintenance windows. */
+const ENTRY_STALE_GRACE = 24 * 60 * 60 * 1000;
+
+export class FplMaintenanceError extends Error {
+  readonly status = 503;
+  constructor(message = "FPL is updating — team and picks data are temporarily unavailable. Try again in a few minutes.") {
+    super(message);
+    this.name = "FplMaintenanceError";
+  }
+}
+
+function parseFplErrorBody(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (typeof parsed === "string") return parsed;
+  } catch {
+    // plain text body
+  }
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed.length < 200 ? trimmed : null;
+}
+
+function fplHttpError(path: string, status: number, statusText: string, body: string): Error {
+  const detail = parseFplErrorBody(body);
+  if (status === 503 && detail?.toLowerCase().includes("being updated")) {
+    return new FplMaintenanceError();
+  }
+  if (status === 503) {
+    return new FplMaintenanceError(
+      detail ??
+        "FPL team data is temporarily unavailable (503). The game may be updating — try again shortly.",
+    );
+  }
+  return new Error(`FPL API ${path} failed: ${status} ${statusText}${detail ? ` — ${detail}` : ""}`);
+}
 
 /**
  * FPL / Cloudflare often 403s non-browser TLS fingerprints.
@@ -230,9 +269,17 @@ async function curlFetchJson<T>(url: string): Promise<T> {
         idx >= 0 ? Number(body.slice(idx + marker.length).trim()) : 0;
 
       if (status && status !== 200) {
-        lastErr = new Error(`curl HTTP ${status}`);
+        const detail = parseFplErrorBody(jsonPart);
+        lastErr =
+          status === 503
+            ? new FplMaintenanceError(
+                detail?.toLowerCase().includes("being updated")
+                  ? undefined
+                  : detail ?? undefined,
+              )
+            : new Error(`curl HTTP ${status}${detail ? ` — ${detail}` : ""}`);
         if ((status === 403 || status === 429 || status >= 500) && attempt < 3) {
-          await sleep(500 * attempt);
+          await sleep(status === 503 ? 1500 * attempt : 500 * attempt);
           continue;
         }
         throw lastErr;
@@ -278,7 +325,8 @@ async function fetchJsonOnce<T>(url: string, path: string): Promise<T> {
   }
 
   if (!res.ok) {
-    throw new Error(`FPL API ${path} failed: ${res.status} ${res.statusText}`);
+    const body = await res.text();
+    throw fplHttpError(path, res.status, res.statusText, body);
   }
   return (await res.json()) as T;
 }
@@ -303,7 +351,7 @@ async function fplFetch<T>(path: string): Promise<T> {
           / 5\d\d /.test(msg) ||
           msg.includes("fetch failed");
         if (retryable && attempt < MAX_ATTEMPTS) {
-          await sleep(450 * attempt);
+          await sleep(lastError instanceof FplMaintenanceError ? 2000 * attempt : 450 * attempt);
           continue;
         }
         break;
@@ -315,6 +363,7 @@ async function fplFetch<T>(path: string): Promise<T> {
       try {
         return await curlFetchJson<T>(url);
       } catch (curlErr) {
+        if (curlErr instanceof FplMaintenanceError) throw curlErr;
         const curlMsg =
           curlErr instanceof Error ? curlErr.message : "curl fallback failed";
         throw new Error(
@@ -363,8 +412,11 @@ export async function getElementSummary(playerId: number): Promise<ElementSummar
 }
 
 export async function getEntry(entryId: number): Promise<EntrySummary> {
-  return withCache(`entry-${entryId}`, ENTRY_TTL, () =>
-    fplFetch<EntrySummary>(`/entry/${entryId}/`),
+  return withCacheStaleFallback(
+    `entry-${entryId}`,
+    ENTRY_TTL,
+    ENTRY_STALE_GRACE,
+    () => fplFetch<EntrySummary>(`/entry/${entryId}/`),
   );
 }
 
@@ -372,7 +424,10 @@ export async function getEntryPicks(
   entryId: number,
   eventId: number,
 ): Promise<EntryPicks> {
-  return withCache(`entry-picks-${entryId}-${eventId}`, ENTRY_TTL, () =>
-    fplFetch<EntryPicks>(`/entry/${entryId}/event/${eventId}/picks/`),
+  return withCacheStaleFallback(
+    `entry-picks-${entryId}-${eventId}`,
+    ENTRY_TTL,
+    ENTRY_STALE_GRACE,
+    () => fplFetch<EntryPicks>(`/entry/${entryId}/event/${eventId}/picks/`),
   );
 }

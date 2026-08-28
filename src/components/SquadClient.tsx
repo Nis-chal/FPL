@@ -18,7 +18,7 @@ import {
   trySwap,
   xiProjectedTotal,
 } from "@/lib/pitch";
-import { filterByPrice, pickCaptain, sortByRank } from "@/lib/ranking";
+import { filterByPrice, pickCaptain, pickViceCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
 import { buildRecommendedSquad, rankFormations } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
@@ -52,24 +52,30 @@ function reassignArmbands(
   captainId: number,
   viceId: number,
 ): { captainId: number; viceId: number } {
-  let nextCaptain = captainId;
-  let nextVice = viceId;
-  if (!startingXi.some((p) => p.id === nextCaptain)) {
-    nextCaptain = [...startingXi].sort(
-      (a, b) => b.projectedPoints - a.projectedPoints,
-    )[0]?.id ?? captainId;
-  }
-  if (
-    !startingXi.some((p) => p.id === nextVice) ||
-    nextVice === nextCaptain
-  ) {
-    nextVice =
-      [...startingXi]
-        .filter((p) => p.id !== nextCaptain)
-        .sort((a, b) => b.projectedPoints - a.projectedPoints)[0]?.id ??
-      nextCaptain;
-  }
-  return { captainId: nextCaptain, viceId: nextVice };
+  void viceId;
+  const current = startingXi.find((p) => p.id === captainId);
+  const captain =
+    current && (current.position === "MID" || current.position === "FWD")
+      ? current
+      : pickCaptain(startingXi, ["overall"]) ??
+        [...startingXi]
+          .filter((p) => p.position === "MID" || p.position === "FWD")
+          .sort((a, b) => b.projectedPoints - a.projectedPoints)[0];
+  const nextCaptain = captain?.id ?? captainId;
+  const vice =
+    pickViceCaptain(
+      startingXi.filter((p) => p.id !== nextCaptain),
+      captain ?? startingXi[0]!,
+      ["overall"],
+    ) ??
+    [...startingXi]
+      .filter(
+        (p) =>
+          p.id !== nextCaptain &&
+          (p.position === "MID" || p.position === "FWD"),
+      )
+      .sort((a, b) => b.projectedPoints - a.projectedPoints)[0];
+  return { captainId: nextCaptain, viceId: vice?.id ?? nextCaptain };
 }
 
 export function SquadClient({
@@ -138,8 +144,9 @@ export function SquadClient({
     const captain =
       pickCaptain(squad.startingXi, rankBy, seasonBasis, chip) ?? squad.captain;
     const vice =
-      pickCaptain(
-        squad.startingXi.filter((p) => p.id !== captain.id),
+      pickViceCaptain(
+        squad.startingXi,
+        captain,
         rankBy,
         seasonBasis,
         chip === "triple_captain" ? "none" : chip,

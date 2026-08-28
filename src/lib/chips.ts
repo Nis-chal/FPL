@@ -1,4 +1,5 @@
 import type { ScoredPlayer } from "@/lib/types";
+import { isOutfieldCaptainCandidate } from "@/lib/squad-eligibility";
 
 /** Active FPL chip lens for analysis / squad building. */
 export type ChipMode = "none" | "triple_captain" | "bench_boost" | "free_hit";
@@ -111,15 +112,18 @@ export function sortByChip(
   );
 }
 
-/** Captain pool for Triple Captain — likely starters only. */
+/** Captain pool for Triple Captain — likely outfield starters only. */
 export function pickChipCaptain(
   players: ScoredPlayer[],
   chip: ChipMode,
 ): ScoredPlayer | undefined {
   if (chip !== "triple_captain") return undefined;
   const pool = players.filter(
-    (p) => p.startChance >= 0.55 && p.availabilityFactor >= 0.55,
+    (p) =>
+      isOutfieldCaptainCandidate(p) &&
+      p.startChance >= 0.55 &&
+      p.availabilityFactor >= 0.55,
   );
-  const ranked = sortByChip(pool.length > 0 ? pool : players, chip);
+  const ranked = sortByChip(pool.length > 0 ? pool : players.filter(isOutfieldCaptainCandidate), chip);
   return ranked[0];
 }

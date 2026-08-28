@@ -7,6 +7,12 @@ import type {
 } from "@/lib/types";
 import { chipPlayerScore, type ChipMode } from "@/lib/chips";
 import { playerRatingContribution } from "@/lib/ranking";
+import {
+  filterSquadCandidates,
+  pickOutfieldCaptain,
+  pickOutfieldViceCaptain,
+  pickStartingGoalkeeper,
+} from "@/lib/squad-eligibility";
 import { rateTeam } from "@/lib/team-rating";
 import { BUDGET, SQUAD_LIMITS } from "@/lib/utils";
 
@@ -60,9 +66,7 @@ export function formationPreferenceLabel(pref: FormationPreference): string {
  * (max 3 per club). Used for “best formation” insights.
  */
 export function rankFormations(players: ScoredPlayer[]): FormationRank[] {
-  const pool = players
-    .filter((p) => p.availabilityFactor >= 0.35)
-    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4);
+  const pool = filterSquadCandidates(players);
 
   const byPos = (pos: Position) =>
     [...pool.filter((p) => p.position === pos)].sort(
@@ -223,9 +227,11 @@ function pickBestXi(
   } | null = null;
 
   const byPos = (pos: Position) =>
-    [...squad.filter((p) => p.position === pos)].sort(
-      (a, b) => scoreFn(b) - scoreFn(a),
-    );
+    [...squad.filter((p) => p.position === pos)].sort((a, b) => {
+      const scoreDiff = scoreFn(b) - scoreFn(a);
+      if (Math.abs(scoreDiff) > 0.08) return scoreDiff;
+      return b.startChance - a.startChance;
+    });
 
   const tryFormations =
     preferred === "auto"
@@ -250,8 +256,12 @@ function pickBestXi(
         continue;
       }
 
+    const gkList = byPos("GKP");
+      const gkStarter = pickStartingGoalkeeper(gkList, scoreFn);
+      if (!gkStarter) continue;
+
       const startingXi = [
-        gk[0],
+        gkStarter,
         ...def.slice(0, formation.DEF),
         ...mid.slice(0, formation.MID),
         ...fwd.slice(0, formation.FWD),
@@ -266,7 +276,7 @@ function pickBestXi(
       if (squad.length === 15 && bench.length !== 4) continue;
 
       const projectedPoints = startingXi.reduce(
-        (sum, p) => sum + p.projectedPoints,
+        (sum, p) => sum + scoreFn(p),
         0,
       );
 
@@ -335,9 +345,9 @@ export function buildBestSquad(
 ): BestSquad {
   const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
   const minAvail = chip === "bench_boost" || chip === "free_hit" ? 0.4 : 0.35;
-  const candidates = scored
-    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4)
-    .filter((p) => p.availabilityFactor >= minAvail);
+  const candidates = filterSquadCandidates(scored).filter(
+    (p) => p.availabilityFactor >= minAvail,
+  );
 
   const scoreFn = (p: ScoredPlayer) => buildScore(p, chip);
   const mins = minPriceByPos(candidates);
@@ -429,9 +439,11 @@ export function buildBestSquad(
     scoreFn,
     formationPref,
   );
-  const orderedXi = [...startingXi].sort((a, b) => scoreFn(b) - scoreFn(a));
-  const captain = orderedXi[0] ?? squad[0];
-  const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
+  const captain =
+    pickOutfieldCaptain(startingXi, scoreFn) ?? startingXi[0] ?? squad[0];
+  const viceCaptain =
+    pickOutfieldViceCaptain(startingXi, captain, scoreFn) ??
+    captain;
 
   if (!captain) {
     const fallback = candidates[0] ?? scored[0];
@@ -524,8 +536,12 @@ function finalizeSquad(
         ) {
           continue;
         }
+        const gkStarter = pickStartingGoalkeeper(gk, (p) =>
+          playerRatingContribution(p),
+        );
+        if (!gkStarter) continue;
         const startingXi = [
-          gk[0],
+          gkStarter,
           ...def.slice(0, formation.DEF),
           ...mid.slice(0, formation.MID),
           ...fwd.slice(0, formation.FWD),
@@ -565,13 +581,10 @@ function finalizeSquad(
         ? playerRatingContribution(p)
         : p.projectedPoints,
   ).slice(0, 4);
-  const orderedXi = [...startingXi].sort((a, b) =>
-    optimize === "rating"
-      ? playerRatingContribution(b) - playerRatingContribution(a)
-      : b.projectedPoints - a.projectedPoints,
-  );
-  const captain = orderedXi[0] ?? squad[0];
-  const viceCaptain = orderedXi[1] ?? orderedXi[0] ?? squad[1] ?? captain;
+  const captain =
+    pickOutfieldCaptain(startingXi, scoreFn) ?? startingXi[0] ?? squad[0];
+  const viceCaptain =
+    pickOutfieldViceCaptain(startingXi, captain, scoreFn) ?? captain;
 
   if (!captain) {
     const fallback = candidates[0] ?? scored[0];
@@ -620,9 +633,9 @@ export function buildBestSquadByRating(
   formationPref: FormationPreference = "auto",
 ): BestSquad {
   const budget = Math.min(BUDGET, Math.max(700, Math.round(budgetTenths)));
-  const candidates = scored
-    .filter((p) => p.minutes > 0 || p.form > 0 || p.startChance >= 0.4)
-    .filter((p) => p.availabilityFactor >= 0.35);
+  const candidates = filterSquadCandidates(scored).filter(
+    (p) => p.availabilityFactor >= 0.35,
+  );
 
   const squad: ScoredPlayer[] = [];
   let remaining = budget;

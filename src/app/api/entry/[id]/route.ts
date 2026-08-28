@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { FplMaintenanceError } from "@/lib/fpl-client";
 import { getEntryInsights } from "@/lib/insights";
 import { parseHorizon, parseIncludeAccumulated } from "@/lib/probabilities";
 
@@ -21,6 +22,9 @@ export async function GET(
     const detail = await getEntryInsights(entryId, horizon, includeAccumulated);
     return NextResponse.json(detail);
   } catch (error) {
+    if (error instanceof FplMaintenanceError) {
+      return NextResponse.json({ error: error.message }, { status: 503 });
+    }
     return NextResponse.json(
       {
         error:
