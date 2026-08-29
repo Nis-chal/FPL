@@ -12,6 +12,11 @@ import {
 } from "react";
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { FixtureStrip } from "@/components/FixturePill";
+import {
+  fixtureRowClass,
+  FixtureScore,
+  FixtureStatusBadge,
+} from "@/components/FixtureListRow";
 import { LatestNewsCard } from "@/components/LatestNews";
 import { PlayerPhoto } from "@/components/PlayerMedia";
 import {
@@ -358,12 +363,19 @@ function PlayerDetailBody({ detail }: { detail: PlayerDetailPayload }) {
               {upcoming.map((f) => (
                 <li
                   key={f.id}
-                  className="flex justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
+                  className={fixtureRowClass(f.isCurrent || f.isLive)}
                 >
-                  <span>
+                  <span className="text-zinc-200">
                     GW{f.event ?? "?"} · {f.isHome ? "H" : "A"} {f.opponentName}
+                    <FixtureStatusBadge fixture={f} />
                   </span>
-                  <span className="text-zinc-400">FDR {f.difficulty}</span>
+                  <span className="flex items-center gap-2 text-zinc-400">
+                    {f.hasResult ? (
+                      <FixtureScore fixture={f} />
+                    ) : (
+                      <span>FDR {f.difficulty}</span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

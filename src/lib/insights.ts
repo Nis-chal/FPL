@@ -5,7 +5,7 @@ import {
   getApiFootballExtrasForPlayer,
 } from "@/lib/api-football";
 import { enrichScoredWithSeasonPoints } from "@/lib/db/season-points";
-import { buildVsUpcomingClubs } from "@/lib/opponent-history";
+import { buildVsUpcomingClubs, buildClubVsUpcomingClubs } from "@/lib/opponent-history";
 import { pickCaptain } from "@/lib/ranking";
 import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
 import { buildBestSquad } from "@/lib/squad";
@@ -18,8 +18,8 @@ import {
   getNextEvent,
   getPointsEvent,
   nextFixturesForTeam,
+  playerUpcomingFixtures,
   recentFixturesForTeam,
-  headToHeadFixtures,
   teamMap,
 } from "@/lib/utils";
 
@@ -98,10 +98,16 @@ export async function getClubDetail(teamId: number, horizon = 5) {
   const teams = teamMap(bootstrap.teams);
   const upcoming = nextFixturesForTeam(fixtures, teamId, teams, 7);
   const recent = recentFixturesForTeam(fixtures, teamId, teams, 7);
+  const currentEvent = getCurrentEvent(bootstrap.events);
+  const seasonStartYear = currentEvent
+    ? new Date(currentEvent.deadline_time).getUTCFullYear() -
+      (new Date(currentEvent.deadline_time).getUTCMonth() < 6 ? 1 : 0)
+    : new Date().getUTCFullYear();
+  const currentSeasonLabel = `${seasonStartYear}/${String(seasonStartYear + 1).slice(-2)}`;
   let scored = scorePlayers(bootstrap, fixtures, horizon).filter(
     (p) => p.teamId === teamId,
   );
-  const current = getCurrentEvent(bootstrap.events);
+  const current = currentEvent;
   scored = await enrichPlayersWithApiFootball(
     scored,
     seasonFromEvent(current),
@@ -123,18 +129,13 @@ export async function getClubDetail(teamId: number, horizon = 5) {
       chanceOfPlaying: p.chanceOfPlaying,
     }));
 
-  const vsUpcoming = upcoming.map((u) => {
-    const meetings = headToHeadFixtures(fixtures, teamId, u.opponentId, teams);
-    return {
-      opponentId: u.opponentId,
-      opponentName: u.opponentName,
-      opponentShort: u.opponentShort,
-      nextEvent: u.event,
-      nextIsHome: u.isHome,
-      nextDifficulty: u.difficulty,
-      meetings,
-    };
-  });
+  const vsUpcoming = buildClubVsUpcomingClubs(
+    upcoming,
+    fixtures,
+    teamId,
+    teams,
+    currentSeasonLabel,
+  );
 
   return {
     team,
@@ -219,16 +220,13 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
     };
   }
 
-  const upcomingFixtures = summary.fixtures.slice(0, 7).map((f) => ({
-    opponentId: f.is_home ? f.team_a : f.team_h,
-    opponentName:
-      teams.get(f.is_home ? f.team_a : f.team_h)?.name ?? "Unknown",
-    opponentShort:
-      teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
-    event: f.event,
-    isHome: f.is_home,
-    difficulty: f.difficulty,
-  }));
+  const upcomingList = playerUpcomingFixtures(
+    summary.fixtures,
+    fixtures,
+    player.teamId,
+    teams,
+    7,
+  );
 
   const element = bootstrap.elements.find((e) => e.id === playerId);
   const { fetchHistoricalH2hByOpponent } = await import(
@@ -241,7 +239,7 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
     if (element?.code) {
       historicalByShort = await fetchHistoricalH2hByOpponent(
         element.code,
-        upcomingFixtures.map((u) => u.opponentShort),
+        upcomingList.map((u) => u.opponentShort),
       );
     }
   } catch {
@@ -285,28 +283,11 @@ export async function getPlayerDetail(playerId: number, horizon = 5) {
     player,
     history,
     historyFull,
-    upcoming: summary.fixtures.slice(0, 7).map((f) => ({
-      id: f.id,
-      event: f.event,
-      kickoff_time: f.kickoff_time,
-      isHome: f.is_home,
-      opponentId: f.is_home ? f.team_a : f.team_h,
-      opponentName: teams.get(f.is_home ? f.team_a : f.team_h)?.name ?? "Unknown",
-      opponentShort:
-        teams.get(f.is_home ? f.team_a : f.team_h)?.short_name ?? "???",
-      difficulty: f.difficulty,
-      finished: f.finished,
-      hasResult: f.finished,
-      isLive: false,
-      minutes: 0,
-      teamScore: null,
-      opponentScore: null,
-      result: null as null,
-    })),
+    upcoming: upcomingList,
     historyPast: sortSeasonsLatestFirst([...summary.history_past]).slice(0, 5),
     currentSeason,
     currentSeasonLabel,
-    vsUpcoming: buildVsUpcomingClubs(upcomingFixtures, historyFull, {
+    vsUpcoming: buildVsUpcomingClubs(upcomingList, historyFull, {
       currentSeasonLabel,
       historicalByShort,
       limit: 5,

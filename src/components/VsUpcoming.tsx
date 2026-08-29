@@ -242,7 +242,14 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/30 px-3 py-2.5">
+    <div
+      className={[
+        "rounded-xl border px-3 py-2.5",
+        club.nextIsCurrent || club.nextIsLive
+          ? "border-rose-500/40 bg-rose-500/5 ring-1 ring-rose-500/20"
+          : "border-zinc-800/80 bg-zinc-950/30",
+      ].join(" ")}
+    >
       {/* Row 1: name + odds + scorelines */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <h3 className="shrink-0 text-sm font-semibold text-zinc-50">
@@ -250,6 +257,21 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
           <span className="ml-1.5 text-[11px] font-normal text-zinc-500">
             GW{club.nextEvent ?? "?"} · FDR {club.nextDifficulty}
           </span>
+          {club.nextIsLive && (
+            <span className="ml-1.5 rounded bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold uppercase text-zinc-950">
+              Live {club.nextMinutes ?? 0}&apos;
+            </span>
+          )}
+          {!club.nextIsLive && club.nextIsCurrent && (
+            <span className="ml-1.5 rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-bold uppercase text-zinc-950">
+              Current
+            </span>
+          )}
+          {club.nextTeamScore != null && club.nextOpponentScore != null && (
+            <span className="ml-1.5 font-mono text-xs font-bold text-zinc-200">
+              {club.nextTeamScore}–{club.nextOpponentScore}
+            </span>
+          )}
         </h3>
         {club.meetings.length > 0 && (
           <OutlookInline meetings={club.meetings} />

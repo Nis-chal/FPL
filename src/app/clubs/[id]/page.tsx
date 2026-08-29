@@ -1,9 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ClubVsUpcomingSection } from "@/components/ClubVsUpcoming";
+import {
+  fixtureRowClass,
+  FixtureScore,
+  FixtureStatusBadge,
+} from "@/components/FixtureListRow";
 import { FixtureStrip } from "@/components/FixturePill";
 import { LatestNewsCard } from "@/components/LatestNews";
 import { PlayerTable } from "@/components/PlayerTable";
+import { VsUpcomingSection } from "@/components/VsUpcoming";
 import { Card, ErrorBox } from "@/components/ui";
 import { getClubDetail } from "@/lib/insights";
 
@@ -47,16 +52,18 @@ export default async function ClubDetailPage({
             <FixtureStrip fixtures={detail.upcoming} />
             <ul className="mt-4 space-y-2">
               {detail.upcoming.map((f) => (
-                <li
-                  key={f.id}
-                  className="flex items-center justify-between rounded-lg border border-zinc-800 px-3 py-2 text-sm"
-                >
+                <li key={f.id} className={fixtureRowClass(f.isCurrent || f.isLive)}>
                   <span className="text-zinc-200">
                     GW{f.event ?? "?"} · {f.isHome ? "Home" : "Away"} vs{" "}
                     {f.opponentName}
+                    <FixtureStatusBadge fixture={f} />
                   </span>
-                  <span className="font-mono text-zinc-400">
-                    FDR {f.difficulty}
+                  <span className="flex items-center gap-2 font-mono text-zinc-400">
+                    {f.hasResult ? (
+                      <FixtureScore fixture={f} />
+                    ) : (
+                      <span>FDR {f.difficulty}</span>
+                    )}
                   </span>
                 </li>
               ))}
@@ -110,7 +117,7 @@ export default async function ClubDetailPage({
           </Card>
         </div>
 
-        <ClubVsUpcomingSection rows={detail.vsUpcoming} />
+        <VsUpcomingSection clubs={detail.vsUpcoming} />
 
         <Card
           title="Squad by projected points"

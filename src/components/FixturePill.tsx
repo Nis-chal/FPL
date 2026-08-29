@@ -10,16 +10,40 @@ const toneClass = {
 export function FixturePill({ fixture }: { fixture: FixtureView }) {
   const tone = difficultyTone(fixture.difficulty);
   const label = `${fixture.isHome ? "H" : "A"} ${fixture.opponentShort}`;
+  const isCurrent = fixture.isCurrent || fixture.isLive;
   return (
     <span
-      title={`GW${fixture.event ?? "?"} FDR ${fixture.difficulty}`}
+      title={`GW${fixture.event ?? "?"} FDR ${fixture.difficulty}${
+        fixture.isLive
+          ? ` · LIVE ${fixture.minutes}'`
+          : fixture.isCurrent
+            ? " · current"
+            : ""
+      }`}
       className={[
         "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-        toneClass[tone],
+        isCurrent
+          ? "border-rose-400/60 bg-rose-500/25 text-rose-100 ring-1 ring-rose-400/40"
+          : toneClass[tone],
       ].join(" ")}
     >
       {label}
       <span className="opacity-70">{fixture.difficulty}</span>
+      {fixture.isLive && (
+        <span className="rounded bg-rose-600 px-1 text-[9px] font-bold text-white">
+          LIVE
+        </span>
+      )}
+      {!fixture.isLive && fixture.isCurrent && (
+        <span className="rounded bg-amber-500 px-1 text-[9px] font-bold text-zinc-950">
+          NOW
+        </span>
+      )}
+      {fixture.hasResult && (
+        <span className="font-mono text-[10px] opacity-90">
+          {fixture.teamScore ?? "–"}-{fixture.opponentScore ?? "–"}
+        </span>
+      )}
     </span>
   );
 }

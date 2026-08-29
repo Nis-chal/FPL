@@ -305,6 +305,8 @@ export interface FixtureView {
   hasResult: boolean;
   /** In-progress match (started, not yet provisional/official). */
   isLive: boolean;
+  /** Live or provisional — show as current fixture in lists. */
+  isCurrent: boolean;
   minutes: number;
   teamScore: number | null;
   opponentScore: number | null;

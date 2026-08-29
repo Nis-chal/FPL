@@ -1,8 +1,11 @@
 import type {
   ElementHistory,
   FixtureView,
+  FplFixture,
+  FplTeam,
   PastSeasonStats,
 } from "@/lib/types";
+import { headToHeadFixtures } from "@/lib/utils";
 
 function num(value: string | number | null | undefined): number {
   if (value === null || value === undefined || value === "") return 0;
@@ -44,6 +47,12 @@ export type VsUpcomingClub = {
   nextEvent: number | null;
   nextIsHome: boolean;
   nextDifficulty: number;
+  /** Next fixture is live or provisional. */
+  nextIsCurrent?: boolean;
+  nextIsLive?: boolean;
+  nextMinutes?: number;
+  nextTeamScore?: number | null;
+  nextOpponentScore?: number | null;
   games: number;
   totalPoints: number;
   avgPoints: number;
@@ -82,14 +91,7 @@ function meetingKey(m: Pick<VsOpponentMeeting, "kickoffTime" | "round" | "season
  * For each upcoming opponent, last N H2H meetings (this season + archives).
  */
 export function buildVsUpcomingClubs(
-  upcoming: Array<{
-    opponentId: number;
-    opponentName: string;
-    opponentShort: string;
-    event: number | null;
-    isHome: boolean;
-    difficulty: number;
-  }>,
+  upcoming: FixtureView[],
   history: Array<
     Pick<
       ElementHistory,
@@ -178,11 +180,77 @@ export function buildVsUpcomingClubs(
       nextEvent: u.event,
       nextIsHome: u.isHome,
       nextDifficulty: u.difficulty,
+      nextIsCurrent: u.isCurrent || u.isLive,
+      nextIsLive: u.isLive,
+      nextMinutes: u.minutes,
+      nextTeamScore: u.teamScore,
+      nextOpponentScore: u.opponentScore,
       games,
       totalPoints,
       avgPoints: games > 0 ? Number((totalPoints / games).toFixed(1)) : 0,
       totalGoals,
       totalAssists,
+      meetings,
+    };
+  });
+}
+
+/** Club page: H2H scorelines vs each upcoming opponent (from FPL fixtures). */
+export function buildClubVsUpcomingClubs(
+  upcoming: FixtureView[],
+  fixtures: FplFixture[],
+  teamId: number,
+  teams: Map<number, FplTeam>,
+  currentSeasonLabel: string,
+  limit = 5,
+): VsUpcomingClub[] {
+  return upcoming.map((u) => {
+    const meetings: VsOpponentMeeting[] = headToHeadFixtures(
+      fixtures,
+      teamId,
+      u.opponentId,
+      teams,
+    )
+      .slice(0, limit)
+      .map((f) => ({
+        round: f.event ?? 0,
+        points: 0,
+        goals: 0,
+        assists: 0,
+        minutes: f.isLive ? f.minutes : f.hasResult ? 90 : 0,
+        wasHome: f.isHome,
+        kickoffTime: f.kickoff_time,
+        teamScore: f.teamScore,
+        opponentScore: f.opponentScore,
+        result: f.result,
+        seasonLabel: currentSeasonLabel,
+        ...involvementFromHistory({
+          threat: "0",
+          creativity: "0",
+          defensive_contribution: 0,
+          clearances_blocks_interceptions: 0,
+          tackles: 0,
+          recoveries: 0,
+        }),
+      }));
+
+    return {
+      opponentId: u.opponentId,
+      opponentName: u.opponentName,
+      opponentShort: u.opponentShort,
+      nextEvent: u.event,
+      nextIsHome: u.isHome,
+      nextDifficulty: u.difficulty,
+      nextIsCurrent: u.isCurrent || u.isLive,
+      nextIsLive: u.isLive,
+      nextMinutes: u.minutes,
+      nextTeamScore: u.teamScore,
+      nextOpponentScore: u.opponentScore,
+      games: meetings.length,
+      totalPoints: 0,
+      avgPoints: 0,
+      totalGoals: 0,
+      totalAssists: 0,
       meetings,
     };
   });

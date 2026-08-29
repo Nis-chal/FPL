@@ -181,6 +181,22 @@ export function fixtureIsLive(f: Pick<
   return f.started === true;
 }
 
+/** Live or provisional — highlight as the active fixture in UI lists. */
+export function fixtureIsCurrent(
+  f: Pick<
+    FplFixture,
+    | "finished"
+    | "finished_provisional"
+    | "started"
+    | "minutes"
+    | "team_h_score"
+    | "team_a_score"
+  >,
+): boolean {
+  if (fixtureIsLive(f)) return true;
+  return fixtureHasResult(f) && !f.finished;
+}
+
 export function toFixtureViews(
   fixtures: FplFixture[],
   teamId: number,
@@ -197,6 +213,7 @@ export function toFixtureViews(
       const opponentScore = isHome ? f.team_a_score : f.team_h_score;
       const hasResult = fixtureHasResult(f);
       const isLive = fixtureIsLive(f);
+      const isCurrent = fixtureIsCurrent(f);
       let result: FixtureView["result"] = null;
       if (hasResult && teamScore !== null && opponentScore !== null) {
         if (teamScore > opponentScore) result = "W";
@@ -215,6 +232,7 @@ export function toFixtureViews(
         finished: f.finished,
         hasResult,
         isLive,
+        isCurrent,
         minutes: f.minutes ?? 0,
         teamScore,
         opponentScore,
@@ -235,8 +253,57 @@ export function nextFixturesForTeam(
   limit = 7,
 ): FixtureView[] {
   return toFixtureViews(fixtures, teamId, teams)
-    .filter((f) => !f.hasResult && !f.isLive)
+    .filter((f) => !f.finished)
     .slice(0, limit);
+}
+
+/** Player element-summary fixtures merged with live scores from bootstrap. */
+export function playerUpcomingFixtures(
+  elementFixtures: Array<{
+    id: number;
+    event: number | null;
+    kickoff_time: string | null;
+    is_home: boolean;
+    team_h: number;
+    team_a: number;
+    difficulty: number;
+    finished: boolean;
+  }>,
+  allFixtures: FplFixture[],
+  teamId: number,
+  teams: Map<number, FplTeam>,
+  limit = 7,
+): FixtureView[] {
+  const viewsById = new Map(
+    toFixtureViews(allFixtures, teamId, teams).map((v) => [v.id, v]),
+  );
+
+  return elementFixtures.slice(0, limit).map((ef) => {
+    const full = viewsById.get(ef.id);
+    if (full) return full;
+
+    const isHome = ef.is_home;
+    const opponentId = isHome ? ef.team_a : ef.team_h;
+    const opponent = teams.get(opponentId);
+    return {
+      id: ef.id,
+      event: ef.event,
+      kickoff_time: ef.kickoff_time,
+      isHome,
+      opponentId,
+      opponentName: opponent?.name ?? "Unknown",
+      opponentShort: opponent?.short_name ?? "???",
+      difficulty: ef.difficulty,
+      finished: ef.finished,
+      hasResult: ef.finished,
+      isLive: false,
+      isCurrent: false,
+      minutes: 0,
+      teamScore: null,
+      opponentScore: null,
+      result: null,
+    } satisfies FixtureView;
+  });
 }
 
 export function recentFixturesForTeam(
