@@ -13,12 +13,15 @@ import {
   runBacktest,
   type BacktestReport,
 } from "../src/lib/backtest.ts";
+import { closeDb } from "../src/lib/db/index.ts";
 
 function parseArgs(argv: string[]) {
   let limit = 80;
   let includeAccumulated = true;
   let json = false;
   let delay = 120;
+  let useDatabase = true;
+  let saveToDatabase = true;
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -28,6 +31,10 @@ function parseArgs(argv: string[]) {
       includeAccumulated = false;
     } else if (a === "--json") {
       json = true;
+    } else if (a === "--no-db") {
+      useDatabase = false;
+    } else if (a === "--no-save-db") {
+      saveToDatabase = false;
     } else if (a === "--delay") {
       delay = Number(argv[++i]) || delay;
     } else if (a === "--help" || a === "-h") {
@@ -38,13 +45,15 @@ Options:
   --no-accumulated    Underlying-only projection (no form / EP blend)
   --delay <ms>        Pause between element-summary calls (default 120)
   --json              Write .cache/backtest-latest.json
+  --no-db             Skip MongoDB (FPL API only)
+  --no-save-db        Do not write report to MongoDB
   --help              Show this help
 `);
       process.exit(0);
     }
   }
 
-  return { limit, includeAccumulated, json, delay };
+  return { limit, includeAccumulated, json, delay, useDatabase, saveToDatabase };
 }
 
 async function main() {
@@ -54,6 +63,8 @@ async function main() {
     playerLimit: opts.limit,
     includeAccumulated: opts.includeAccumulated,
     fetchDelayMs: opts.delay,
+    useDatabase: opts.useDatabase,
+    saveToDatabase: opts.saveToDatabase,
     onProgress: (msg) => console.log(msg),
   });
 
@@ -66,9 +77,12 @@ async function main() {
     writeFileSync(file, JSON.stringify(report, null, 2), "utf8");
     console.log(`\nWrote ${file}`);
   }
+
+  await closeDb();
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error(err instanceof Error ? err.message : err);
+  await closeDb().catch(() => undefined);
   process.exit(1);
 });

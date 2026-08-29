@@ -61,11 +61,11 @@ export function BestFormationCard({
               xPts · avg {best.expectedPointsPerGw.toFixed(1)} /GW
             </div>
             <Link
-              href="/squad"
+              href="/recommend"
               className="text-sm font-medium text-emerald-400 hover:text-emerald-300"
               onClick={(e) => e.stopPropagation()}
             >
-              Open pitch →
+              Open recommend →
             </Link>
           </div>
 

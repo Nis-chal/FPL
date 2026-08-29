@@ -4,6 +4,7 @@ import {
   enrichPlayersWithApiFootball,
   getApiFootballExtrasForPlayer,
 } from "@/lib/api-football";
+import { enrichScoredWithSeasonPoints } from "@/lib/db/season-points";
 import { buildVsUpcomingClubs } from "@/lib/opponent-history";
 import { pickCaptain } from "@/lib/ranking";
 import { applyHorizon, scorePlayers, topProjected } from "@/lib/scoring";
@@ -40,6 +41,8 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     scored,
     seasonFromEvent(currentEvent),
   );
+  const seasonPoints = await enrichScoredWithSeasonPoints(scored);
+  scored = seasonPoints.players;
   const bestSquad = buildBestSquad(scored);
   const topScorers = topProjected(scored, 12, {
     minMinutes: 1,
@@ -60,6 +63,14 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     includeAccumulated,
     currentEvent,
     nextEvent,
+    finishedGameweeks: bootstrap.events
+      .filter((e) => e.finished)
+      .map((e) => e.id)
+      .sort((a, b) => a - b),
+    upcomingGameweeks: bootstrap.events
+      .filter((e) => !e.finished)
+      .map((e) => e.id)
+      .sort((a, b) => a - b),
     topScorers,
     captainPick,
     transferTargets,
@@ -68,6 +79,8 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     scored,
     teams: bootstrap.teams,
     fixtures,
+    seasonPointsFromDatabase: seasonPoints.fromDatabase,
+    seasonPointsDbMatches: seasonPoints.matchedInDb,
   };
 }
 

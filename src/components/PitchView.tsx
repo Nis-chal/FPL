@@ -3,6 +3,12 @@
 import { AvailabilityBadge } from "@/components/AvailabilityBadge";
 import { ClubKit } from "@/components/PlayerMedia";
 import { PlayerLink } from "@/components/PlayerDrawer";
+import { TipTrigger } from "@/components/ui";
+import {
+  pointsForGameweek,
+  squadCurrentGwPoints,
+  squadSeasonPoints,
+} from "@/lib/season-accumulated";
 import type { Position, ScoredPlayer } from "@/lib/types";
 import {
   displayProjected,
@@ -47,6 +53,15 @@ function EmptySlot({
   );
 }
 
+function runningGwPoints(
+  player: ScoredPlayer,
+  currentGameweek?: number,
+): number | null {
+  if (player.livePoints != null) return player.livePoints;
+  if (currentGameweek == null) return null;
+  return pointsForGameweek(player.gwPointsHistory, currentGameweek);
+}
+
 function PitchPlayerCard({
   player,
   selected,
@@ -55,6 +70,7 @@ function PitchPlayerCard({
   isCaptain,
   isVice,
   horizon,
+  currentGameweek,
 }: {
   player: ScoredPlayer;
   selected: boolean;
@@ -63,9 +79,11 @@ function PitchPlayerCard({
   isCaptain?: boolean;
   isVice?: boolean;
   horizon: number;
+  currentGameweek?: number;
 }) {
   const overall = playerOverall(player);
   const pts = displayProjected(player, { isCaptain });
+  const gwPts = runningGwPoints(player, currentGameweek);
   void horizon;
 
   return (
@@ -129,15 +147,14 @@ function PitchPlayerCard({
       <div className="mt-1 line-clamp-1 w-full px-0.5 text-[10px] font-bold leading-tight text-zinc-50 sm:text-[11px]">
         {player.webName}
       </div>
-      <div className="mt-0.5 flex h-4 w-full items-center justify-center gap-0.5 text-[10px] font-semibold leading-none text-emerald-300 sm:text-[11px]">
-        <span>{pts.toFixed(1)}</span>
-        {player.livePoints != null && player.livePoints > 0 ? (
-          <span className="text-[9px] text-amber-300">({player.livePoints})</span>
-        ) : null}
+      <div
+        className="mt-0.5 text-[11px] font-bold leading-none text-sky-300 sm:text-xs"
+        title="Current gameweek points"
+      >
+        {gwPts != null ? gwPts : "—"}
       </div>
       <div className="mt-auto w-full truncate px-0.5 text-[9px] leading-tight text-zinc-400">
-        {Math.round(player.startChance * 100)}% ·{" "}
-        {player.expectedPointsPerGw.toFixed(1)}/GW
+        {pts.toFixed(1)} x · {Math.round(player.startChance * 100)}%
       </div>
       <PlayerLink
         playerId={player.id}
@@ -160,6 +177,7 @@ function PitchRow({
   captainId,
   viceId,
   horizon,
+  currentGameweek,
 }: {
   players: ScoredPlayer[];
   selectedId: number | null;
@@ -171,6 +189,7 @@ function PitchRow({
   captainId?: number;
   viceId?: number;
   horizon: number;
+  currentGameweek?: number;
 }) {
   return (
     <div className="flex flex-wrap items-stretch justify-center gap-2 sm:gap-3">
@@ -192,6 +211,7 @@ function PitchRow({
             isCaptain={captainId === p.id}
             isVice={viceId === p.id}
             horizon={horizon}
+            currentGameweek={currentGameweek}
           />
         ),
       )}
@@ -214,6 +234,7 @@ export function PitchView({
   title,
   ratingScore,
   ratingGrade,
+  currentGameweek,
 }: {
   startingXi: ScoredPlayer[];
   bench: ScoredPlayer[];
@@ -229,6 +250,8 @@ export function PitchView({
   title: string;
   ratingScore?: number;
   ratingGrade?: string;
+  /** Current / running FPL gameweek — points shown on each card. */
+  currentGameweek?: number;
 }) {
   const byPos = groupByPosition(startingXi);
   const rows: Array<{ pos: Position; players: ScoredPlayer[] }> = [
@@ -239,15 +262,29 @@ export function PitchView({
   ];
   const formation = formationFromXi(startingXi);
   const total = xiProjectedTotal(startingXi, captainId);
+  const squad = [...startingXi, ...bench];
+  const seasonTotal = squadSeasonPoints(squad);
+  const gwTotal = squadCurrentGwPoints(squad, currentGameweek);
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h3 className="text-lg font-bold text-zinc-100">{title}</h3>
-          <p className="text-sm text-zinc-500">
-            {formation} · × removes a player · tap empty slot to transfer · next{" "}
-            {horizon} GWs
+          <p className="flex items-center gap-1.5 text-sm text-zinc-500">
+            {formation}
+            {onRemove && (
+              <TipTrigger
+                tip={
+                  <p className="text-xs text-zinc-300">
+                    × remove · tap empty slot to transfer · tap pitch ↔ bench to
+                    swap
+                  </p>
+                }
+              >
+                <span className="sr-only">How to edit</span>
+              </TipTrigger>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
@@ -272,6 +309,18 @@ export function PitchView({
                 / next {horizon}
               </span>
             </div>
+          </div>
+          <div className="rounded-xl border border-sky-800/50 bg-sky-950/30 px-3 py-2 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-sky-400">
+              {currentGameweek != null ? `GW${currentGameweek}` : "This GW"}
+            </div>
+            <div className="text-xl font-bold text-sky-300">{gwTotal}</div>
+          </div>
+          <div className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              Season
+            </div>
+            <div className="text-xl font-bold text-zinc-100">{seasonTotal}</div>
           </div>
         </div>
       </div>
@@ -306,6 +355,7 @@ export function PitchView({
                 captainId={captainId}
                 viceId={viceId}
                 horizon={horizon}
+                currentGameweek={currentGameweek}
               />
             </div>
           ))}
@@ -315,11 +365,9 @@ export function PitchView({
       <div className="rounded-2xl border border-zinc-800 bg-zinc-900/60 p-3 sm:p-4">
         <div className="mb-3 flex items-center justify-between">
           <h4 className="text-sm font-bold text-zinc-200">Bench</h4>
-          <span className="text-xs text-zinc-500">
-            {selectedId
-              ? "Select a pitch or bench player to complete the swap"
-              : "× remove · empty slot → transfer list"}
-          </span>
+          {selectedId && (
+            <span className="text-xs text-zinc-500">Tap to swap</span>
+          )}
         </div>
         <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
           {bench.map((p, index) => (
@@ -340,6 +388,7 @@ export function PitchView({
                   onSelect={onSelect}
                   onRemove={onRemove}
                   horizon={horizon}
+                  currentGameweek={currentGameweek}
                 />
               )}
             </div>

@@ -7,9 +7,13 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "backtest": "bun scripts/backtest.mts"
+    "backtest": "bun scripts/backtest.mts",
+    "db:ping": "bun scripts/db-ping.mts",
+    "db:sync": "bun scripts/sync-db.mts",
+    "ai:reset": "bun scripts/reset-ai-squad.mts"
   },
   "dependencies": {
+    "mongodb": "6.12.0",
     "next": "16.3.2",
     "react": "19.2.8",
     "react-dom": "19.2.8"

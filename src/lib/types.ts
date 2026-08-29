@@ -325,6 +325,12 @@ export interface ScoredPlayer {
   price: number;
   selectedBy: number;
   totalPoints: number;
+  /** Season FPL points (MongoDB GW history when synced, else bootstrap). */
+  seasonPointsAccumulated?: number;
+  seasonGwPlayed?: number;
+  seasonPointsFromDb?: boolean;
+  /** Per-GW points from MongoDB (requires db:sync). */
+  gwPointsHistory?: Array<{ round: number; points: number; minutes: number }>;
   form: number;
   minutes: number;
   status: string;

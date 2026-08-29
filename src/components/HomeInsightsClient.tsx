@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { AnalysisFilters } from "@/components/AnalysisFilters";
+import { AiSquadHomeCard } from "@/components/AiSquadHomeCard";
 import { BestFormationCard } from "@/components/BestFormationCard";
 import { LiveGwStrip } from "@/components/LiveGwStrip";
 import { PlayerTable, Reasons } from "@/components/PlayerTable";
@@ -120,19 +121,13 @@ export function HomeInsightsClient({
           accent
           tip={
             <div className="space-y-1 text-xs text-zinc-300">
-              <p>
-                Latest active FPL gameweek (rolls forward when the previous GW
-                is finished).
-              </p>
               {currentEvent?.deadline_time && (
-                <p className="text-zinc-400">
+                <p>
                   Deadline{" "}
                   {new Date(currentEvent.deadline_time).toLocaleString()}
                 </p>
               )}
-              {nextEvent && (
-                <p className="text-zinc-500">Next: {nextEvent.name}</p>
-              )}
+              {nextEvent && <p className="text-zinc-500">Next: {nextEvent.name}</p>}
             </div>
           }
         />
@@ -167,6 +162,12 @@ export function HomeInsightsClient({
           value={`${formatPrice(bestSquad.totalCost)} · ${formatPrice(bestSquad.bank)} left`}
         />
       </div>
+
+      <AiSquadHomeCard
+        players={scored}
+        horizon={horizon}
+        currentGameweek={currentEvent?.id}
+      />
 
       <BestFormationCard formations={formations} horizon={horizon} />
 

@@ -6,7 +6,7 @@ import { BestFormationCard } from "@/components/BestFormationCard";
 import { PitchView } from "@/components/PitchView";
 import { PlayerLink } from "@/components/PlayerDrawer";
 import { SquadTransferDrawer } from "@/components/SquadTransferPanel";
-import { TeamIdForm } from "@/components/TeamIdForm";
+import { TeamIdSearch } from "@/components/TeamIdSearch";
 import { Reasons } from "@/components/PlayerTable";
 import { TeamRatingCard } from "@/components/TeamRatingCard";
 import { Card, ErrorBox, Stat } from "@/components/ui";
@@ -81,9 +81,11 @@ function reassignArmbands(
 export function SquadClient({
   allPlayers,
   initialHorizon = 5,
+  currentGameweek,
 }: {
   allPlayers: ScoredPlayer[];
   initialHorizon?: number;
+  currentGameweek?: number;
 }) {
   const { ready, numericId } = useTeamId();
   const { seasonBasis, setSeasonBasis, includeAccumulated } =
@@ -176,7 +178,7 @@ export function SquadClient({
     setModelRemovedId(null);
     setModelDrawerOpen(false);
     setSwapHint(
-      `Rebuilt for ${formatPrice(BUDGET)} budget · ${formatPrice(built.bank)} bank — × to transfer, or tap pitch ↔ bench to swap`,
+      `Rebuilt · ${formatPrice(built.bank)} bank`,
     );
   }, [built]);
 
@@ -301,7 +303,7 @@ export function SquadClient({
       });
       clearTransfer();
       setSwapHint(
-        `Transferred in ${inPlayer.webName} · ${formatPrice(result.totalCost)} spent · ${formatPrice(result.bank)} bank`,
+        `In: ${inPlayer.webName} · ${formatPrice(result.bank)} bank`,
       );
     },
     [],
@@ -335,7 +337,7 @@ export function SquadClient({
         return;
       }
       setRemovedId(id);
-      setSwapHint("Player removed — tap the empty slot to open the transfer list.");
+      setSwapHint("Removed — tap empty slot to transfer.");
     },
     [],
   );
@@ -353,7 +355,7 @@ export function SquadClient({
       clearTransfer();
       if (selected === null) {
         setSelected(id);
-        setSwapHint("Tap a player on the other line (pitch ↔ bench) to swap.");
+        setSwapHint("Tap pitch ↔ bench to swap.");
         return;
       }
       if (selected === id) {
@@ -365,7 +367,7 @@ export function SquadClient({
       const result = trySwap(lineup.startingXi, lineup.bench, selected, id);
       if (!result) {
         setSelected(id);
-        setSwapHint("Tap pitch ↔ bench to swap lines (same line reselects).");
+        setSwapHint("Tap the other line to swap.");
         return;
       }
 
@@ -380,7 +382,7 @@ export function SquadClient({
         ...arms,
       });
       setSelected(null);
-      setSwapHint(`Swapped — formation ${formationFromXi(result.startingXi)}.`);
+      setSwapHint(`Swapped · ${formationFromXi(result.startingXi)}`);
       void which;
     },
     [],
@@ -438,27 +440,23 @@ export function SquadClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0 flex-1">
-          <AnalysisFilters
-            horizon={horizon}
-            onHorizonChange={setHorizon}
-            seasonBasis={seasonBasis}
-            onSeasonBasisChange={setSeasonBasis}
-            rankBy={rankBy}
-            onToggleRank={toggleRank}
-            onReset={resetFilters}
-            priceBounds={priceBounds}
-            onPriceBoundsChange={setPriceBounds}
-            chip={chip}
-            onChipChange={setChip}
-            formation={formation}
-            onFormationChange={setFormation}
-          />
-        </div>
-        <div className="w-full max-w-md">
-          <TeamIdForm compact />
-        </div>
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <AnalysisFilters
+          horizon={horizon}
+          onHorizonChange={setHorizon}
+          seasonBasis={seasonBasis}
+          onSeasonBasisChange={setSeasonBasis}
+          rankBy={rankBy}
+          onToggleRank={toggleRank}
+          onReset={resetFilters}
+          priceBounds={priceBounds}
+          onPriceBoundsChange={setPriceBounds}
+          chip={chip}
+          onChipChange={setChip}
+          formation={formation}
+          onFormationChange={setFormation}
+          trailing={<TeamIdSearch />}
+        />
       </div>
 
       {swapHint && (
@@ -468,8 +466,8 @@ export function SquadClient({
       )}
 
       <Card
-        title="Recommended squad"
-        subtitle={`£100.0m · × removes · tap empty slot to transfer · pitch ↔ bench swap · next ${horizon}`}
+        title="Best squad"
+        subtitle={`${formatPrice(BUDGET)} · next ${horizon}`}
       >
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-xs uppercase tracking-wider text-zinc-500">
@@ -499,7 +497,7 @@ export function SquadClient({
           </span>
           <span className="ml-auto text-xs text-zinc-500">
             {formatPrice(modelTotalCost)} / {formatPrice(BUDGET)} ·{" "}
-            {modelTotal.toFixed(1)} XI pts
+            {modelTotal.toFixed(1)} xPts
           </span>
         </div>
 
@@ -524,9 +522,7 @@ export function SquadClient({
           onFillSlot={() => {
             if (modelRemovedId != null) {
               setModelDrawerOpen(true);
-              setSwapHint(
-                "Pick a replacement — filter by price and xPts in the drawer.",
-              );
+              setSwapHint("Pick a replacement in the drawer.");
             }
           }}
           onRestoreSlot={clearModelSlot}
@@ -543,6 +539,7 @@ export function SquadClient({
           }
           ratingGrade={modelRating.grade}
           ratingScore={modelRating.score}
+          currentGameweek={currentGameweek}
         />
       </Card>
 
@@ -554,16 +551,14 @@ export function SquadClient({
           className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-zinc-900/80 md:px-5"
         >
           <div>
-            <h2 className="text-base font-bold text-zinc-100">View details</h2>
+            <h2 className="text-base font-bold text-zinc-100">Details</h2>
             <p className="text-xs text-zinc-500">
-              {detailsOpen
-                ? "Rating, formation ranks, and squad stats"
-                : `${modelRating.grade} ${modelRating.score} · ${
+              {`${modelRating.grade} ${modelRating.score} · ${
                     formation !== "auto"
                       ? formation
                       : (formations[0]?.name ??
                         formationFromXi(activeModel.startingXi))
-                  } · ${formatPrice(modelBank)} bank`}
+                  }`}
             </p>
           </div>
           <span
@@ -627,9 +622,7 @@ export function SquadClient({
           budget={BUDGET}
           onClose={() => {
             setModelDrawerOpen(false);
-            setSwapHint(
-              "Slot still empty — tap + to open transfers, or ↩ to restore.",
-            );
+            setSwapHint("Tap + to transfer, or ↩ to restore.");
           }}
           onTransferIn={(player) =>
             applyTransferToLineup(
@@ -644,17 +637,17 @@ export function SquadClient({
       )}
 
       {loading && (
-        <p className="text-sm text-zinc-400">Loading your current squad…</p>
+        <p className="text-sm text-zinc-400">Loading squad…</p>
       )}
       {error && <ErrorBox message={error} />}
 
       {personalLineup && (
         <Card
-          title={`Your FPL squad${entryName ? ` · ${entryName}` : ""}`}
+          title={entryName ?? "Your squad"}
           subtitle={
             personalTotal != null
-              ? `Projected ${personalTotal.toFixed(1)} pts · ${formatPrice(personalTotalCost)} / ${formatPrice(BUDGET)} · × removes a player, then tap the empty slot for transfers`
-              : "× remove · tap empty slot for transfer list"
+              ? `${personalTotal.toFixed(1)} xPts · ${formatPrice(personalTotalCost)}`
+              : undefined
           }
         >
           <PitchView
@@ -678,9 +671,7 @@ export function SquadClient({
             onFillSlot={() => {
               if (personalRemovedId != null) {
                 setPersonalDrawerOpen(true);
-                setSwapHint(
-                  "Pick a replacement — filter by price and xPts in the drawer.",
-                );
+                setSwapHint("Pick a replacement in the drawer.");
               }
             }}
             onRestoreSlot={clearPersonalSlot}
@@ -697,6 +688,7 @@ export function SquadClient({
             }
             ratingGrade={livePersonalRating?.grade}
             ratingScore={livePersonalRating?.score}
+            currentGameweek={currentGameweek}
           />
         </Card>
       )}
@@ -706,14 +698,11 @@ export function SquadClient({
           title="Suggested transfers"
           subtitle={
             transferHint ||
-            `Top 5 for your squad · next ${horizon} · bank ${formatPrice(entryBank > 0 ? entryBank : Math.max(0, personalBank))}`
+            `Bank ${formatPrice(entryBank > 0 ? entryBank : Math.max(0, personalBank))}`
           }
         >
           {personalSuggestions.length === 0 ? (
-            <p className="text-sm text-zinc-500">
-              No strong upgrades found within bank and club limits for this
-              horizon.
-            </p>
+            <p className="text-sm text-zinc-500">No strong upgrades.</p>
           ) : (
             <div className="flex gap-2 overflow-x-auto pb-1">
               {personalSuggestions.map((t) => (
@@ -776,9 +765,7 @@ export function SquadClient({
           budget={BUDGET}
           onClose={() => {
             setPersonalDrawerOpen(false);
-            setSwapHint(
-              "Slot still empty — tap + to open transfers, or ↩ to restore.",
-            );
+            setSwapHint("Tap + to transfer, or ↩ to restore.");
           }}
           onTransferIn={(player) =>
             applyTransferToLineup(

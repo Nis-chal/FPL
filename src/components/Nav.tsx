@@ -7,8 +7,11 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/clubs", label: "Clubs" },
   { href: "/players", label: "Players" },
-  { href: "/transfers", label: "Transfers" },
+  { href: "/points", label: "Points" },
+  { href: "/ai", label: "AI" },
   { href: "/squad", label: "Squad" },
+  { href: "/recommend", label: "Recommend" },
+  { href: "/transfers", label: "Transfers" },
 ];
 
 export function Nav() {

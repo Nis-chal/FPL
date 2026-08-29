@@ -1,21 +1,22 @@
-import { SquadPageClient } from "@/components/SquadPageClient";
+import { RecommendClient } from "@/components/RecommendClient";
 import { ErrorBox } from "@/components/ui";
 import { getLeagueInsights } from "@/lib/insights";
 
 export const revalidate = 60;
 
-export default async function SquadPage() {
+export default async function RecommendPage() {
   try {
     const insights = await getLeagueInsights(5);
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-zinc-50">Squad</h1>
+          <h1 className="text-3xl font-bold text-zinc-50">Recommend</h1>
         </div>
-        <SquadPageClient
+        <RecommendClient
           allPlayers={insights.scored}
+          upcomingGameweeks={insights.upcomingGameweeks}
           currentGameweek={insights.currentEvent?.id ?? 1}
-          initialHorizon={5}
+          horizon={5}
         />
       </div>
     );
@@ -23,7 +24,9 @@ export default async function SquadPage() {
     return (
       <ErrorBox
         message={
-          error instanceof Error ? error.message : "Failed to load squad"
+          error instanceof Error
+            ? error.message
+            : "Failed to load recommendations"
         }
       />
     );

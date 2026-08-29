@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getCached, setCached, withCache, withCacheStaleFallback } from "@/lib/cache";
+import { getCached, setCached, withCacheStaleFallback } from "@/lib/cache";
+import { withPersistentCache } from "@/lib/db/persistent-cache";
 import type {
   BootstrapStatic,
   ElementSummary,
@@ -386,27 +387,32 @@ function bootstrapTtl(bootstrap: BootstrapStatic): number {
 }
 
 export async function getBootstrap(): Promise<BootstrapStatic> {
-  const hit = getCached<BootstrapStatic>("bootstrap");
+  const memKey = "bootstrap";
+  const hit = getCached<BootstrapStatic>(memKey);
   if (hit !== null) return hit;
-  const data = await fplFetch<BootstrapStatic>("/bootstrap-static/");
-  return setCached("bootstrap", data, bootstrapTtl(data));
+
+  const data = await withPersistentCache("fpl:bootstrap", ACTIVE_TTL, () =>
+    fplFetch<BootstrapStatic>("/bootstrap-static/"),
+  );
+  return setCached(memKey, data, bootstrapTtl(data));
 }
 
 export async function getFixtures(): Promise<FplFixture[]> {
   const bootstrap = await getBootstrap();
-  // Prefer short TTL while a GW is open so provisional / live scores refresh.
   const ttl = isCurrentGwActive(bootstrap) ? LIVE_TTL : IDLE_TTL;
-  return withCache("fixtures", ttl, () => fplFetch<FplFixture[]>("/fixtures/"));
+  return withPersistentCache("fpl:fixtures", ttl, () =>
+    fplFetch<FplFixture[]>("/fixtures/"),
+  );
 }
 
 export async function getEventLive(eventId: number): Promise<EventLive> {
-  return withCache(`event-live-${eventId}`, LIVE_TTL, () =>
+  return withPersistentCache(`fpl:event-live-${eventId}`, LIVE_TTL, () =>
     fplFetch<EventLive>(`/event/${eventId}/live/`),
   );
 }
 
 export async function getElementSummary(playerId: number): Promise<ElementSummary> {
-  return withCache(`element-${playerId}`, SUMMARY_TTL, () =>
+  return withPersistentCache(`fpl:element-${playerId}`, SUMMARY_TTL, () =>
     fplFetch<ElementSummary>(`/element-summary/${playerId}/`),
   );
 }

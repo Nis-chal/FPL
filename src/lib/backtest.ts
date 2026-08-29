@@ -1,5 +1,12 @@
 import { getBootstrap, getElementSummary, getFixtures } from "@/lib/fpl-client";
 import {
+  isMongoConfigured,
+  getPlayerHistories,
+  upsertPlayerHistory,
+  saveBacktestRun,
+  countPlayerHistories,
+} from "@/lib/db";
+import {
   attackingThreatScore,
   estimateCleanSheetChance,
   estimateStartChance,
@@ -58,11 +65,15 @@ export type BacktestReport = {
 };
 
 export type RunBacktestOptions = {
-  /** Max players to fetch element-summary for (API cost). */
+  /** Max players to sample (API cost if not in MongoDB). */
   playerLimit?: number;
   includeAccumulated?: boolean;
-  /** Delay between element-summary requests (ms). */
+  /** Delay between element-summary API calls when DB miss (ms). */
   fetchDelayMs?: number;
+  /** Read player GW history from MongoDB when configured (default true). */
+  useDatabase?: boolean;
+  /** Save report to MongoDB backtest_runs (default true when DB configured). */
+  saveToDatabase?: boolean;
   onProgress?: (msg: string) => void;
 };
 
@@ -285,7 +296,10 @@ export async function runBacktest(
   const playerLimit = options.playerLimit ?? 80;
   const includeAccumulated = options.includeAccumulated ?? true;
   const fetchDelayMs = options.fetchDelayMs ?? 120;
+  const useDatabase = options.useDatabase ?? true;
+  const saveToDatabase = options.saveToDatabase ?? useDatabase;
   const log = options.onProgress ?? (() => undefined);
+  const dbReady = useDatabase && isMongoConfigured();
 
   const [bootstrap, fixtures] = await Promise.all([
     getBootstrap(),
@@ -303,6 +317,21 @@ export async function runBacktest(
     .sort((a, b) => b.minutes - a.minutes)
     .slice(0, playerLimit);
 
+  let historyByPlayer = new Map<number, ElementHistory[]>();
+  if (dbReady) {
+    try {
+      const count = await countPlayerHistories();
+      historyByPlayer = await getPlayerHistories(pool.map((p) => p.id));
+      log(
+        `MongoDB: ${historyByPlayer.size}/${pool.length} players loaded (${count} total in DB)`,
+      );
+    } catch (err) {
+      log(
+        `MongoDB unavailable — falling back to FPL API (${err instanceof Error ? err.message : err})`,
+      );
+    }
+  }
+
   log(
     `Backtesting ${pool.length} players across GWs ${finishedRounds.join(", ") || "none"}…`,
   );
@@ -311,25 +340,49 @@ export async function runBacktest(
 
   for (let i = 0; i < pool.length; i++) {
     const el = pool[i]!;
-    log(`[${i + 1}/${pool.length}] ${el.web_name}`);
-    try {
-      const summary = await getElementSummary(el.id);
-      allSamples.push(
-        ...backtestPlayer(
-          el,
-          summary.history,
-          fixtures,
-          teams,
-          finishedRounds,
-          includeAccumulated,
-        ),
-      );
-    } catch (err) {
-      log(
-        `  skip ${el.web_name}: ${err instanceof Error ? err.message : err}`,
-      );
+    let history = historyByPlayer.get(el.id);
+
+    if (history) {
+      log(`[${i + 1}/${pool.length}] ${el.web_name} (db)`);
+    } else {
+      log(`[${i + 1}/${pool.length}] ${el.web_name} (api)`);
+      try {
+        const summary = await getElementSummary(el.id);
+        history = summary.history;
+        if (dbReady) {
+          try {
+            await upsertPlayerHistory({
+              playerId: el.id,
+              webName: el.web_name,
+              teamId: el.team,
+              position: POSITION_MAP[el.element_type],
+              minutes: el.minutes,
+              history: summary.history,
+              syncedAt: new Date().toISOString(),
+            });
+          } catch {
+            // non-fatal cache write
+          }
+        }
+        if (i < pool.length - 1) await sleep(fetchDelayMs);
+      } catch (err) {
+        log(
+          `  skip ${el.web_name}: ${err instanceof Error ? err.message : err}`,
+        );
+        continue;
+      }
     }
-    if (i < pool.length - 1) await sleep(fetchDelayMs);
+
+    allSamples.push(
+      ...backtestPlayer(
+        el,
+        history,
+        fixtures,
+        teams,
+        finishedRounds,
+        includeAccumulated,
+      ),
+    );
   }
 
   const whenPlayed = allSamples.filter((s) => s.minutes > 0);
@@ -359,7 +412,7 @@ export async function runBacktest(
     .sort((a, b) => a.error - b.error)
     .slice(0, 8);
 
-  return {
+  const report: BacktestReport = {
     generatedAt: new Date().toISOString(),
     playerLimit,
     includeAccumulated,
@@ -373,11 +426,27 @@ export async function runBacktest(
     largestOver,
     largestUnder,
     notes: [
+      dbReady
+        ? "Player GW history read from MongoDB when available (collection: player_histories)."
+        : "MongoDB not configured — history fetched from FPL API each run.",
       "Uses current team strength ratings (not historical snapshots) — known limitation.",
       "Does not use ep_next for past GWs (no future leak).",
       "Tune weights in src/lib/probabilities.ts, then re-run to compare MAE.",
     ],
   };
+
+  if (saveToDatabase && isMongoConfigured()) {
+    try {
+      const id = await saveBacktestRun(report);
+      log(`Saved backtest to MongoDB backtest_runs (${id})`);
+    } catch (err) {
+      log(
+        `Could not save backtest to MongoDB: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
+
+  return report;
 }
 
 export function formatBacktestReport(report: BacktestReport): string {

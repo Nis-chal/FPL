@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { getCached, setCached } from "@/lib/cache";
+import { isMongoConfigured } from "@/lib/db/client";
 import type { ApiFootballExtras, ScoredPlayer } from "@/lib/types";
 
 const API_BASE = "https://v3.football.api-sports.io";
@@ -47,16 +48,38 @@ function getAfCache<T>(key: string): T | null {
   if (mem != null) return mem;
   const disk = readDiskCache<T>(key);
   if (disk != null) {
-    // Rehydrate memory so the same process doesn't hit disk repeatedly.
     setCached(key, disk, LEAGUE_CACHE_TTL);
     return disk;
   }
   return null;
 }
 
+async function getAfCacheAsync<T>(key: string): Promise<T | null> {
+  const sync = getAfCache<T>(key);
+  if (sync != null) return sync;
+  if (!isMongoConfigured()) return null;
+  try {
+    const { getStoredApi } = await import("@/lib/db/api-cache");
+    const stored = await getStoredApi<T>(`af:${key}`);
+    if (stored != null) {
+      setCached(key, stored, LEAGUE_CACHE_TTL);
+      return stored;
+    }
+  } catch {
+    // optional
+  }
+  return null;
+}
+
 function setAfCache<T>(key: string, value: T, ttlMs: number): T {
   setCached(key, value, ttlMs);
-  return writeDiskCache(key, value, ttlMs);
+  writeDiskCache(key, value, ttlMs);
+  if (isMongoConfigured()) {
+    import("@/lib/db/api-cache")
+      .then(({ setStoredApi }) => setStoredApi(`af:${key}`, value, ttlMs))
+      .catch(() => undefined);
+  }
+  return value;
 }
 
 export type { ApiFootballExtras };
@@ -276,7 +299,7 @@ export function apiFootballSeasonYear(fromDate = new Date()): number {
  */
 async function resolveAccessibleSeason(preferred: number): Promise<number> {
   const cacheKey = "af-accessible-season-v2";
-  const cached = getAfCache<number>(cacheKey);
+  const cached = await getAfCacheAsync<number>(cacheKey);
   if (cached != null) return cached;
 
   const candidates = [
@@ -377,7 +400,7 @@ function progressCacheKey(season: number) {
 
 async function loadPlTeams(season: number): Promise<TeamRef[]> {
   const cacheKey = `af-pl-teams-${season}`;
-  const hit = getAfCache<TeamRef[]>(cacheKey);
+  const hit = await getAfCacheAsync<TeamRef[]>(cacheKey);
   if (hit && hit.length > 0) return hit;
 
   const data = (await afFetch(
@@ -436,7 +459,7 @@ async function loadPremierLeagueIndex(
 ): Promise<IndexEntry[]> {
   const season = await resolveAccessibleSeason(preferredSeason);
   const cacheKey = progressCacheKey(season);
-  const existing = getAfCache<IndexProgress>(cacheKey);
+  const existing = await getAfCacheAsync<IndexProgress>(cacheKey);
 
   if (existing?.complete && existing.entries.length > 0) {
     return existing.entries;

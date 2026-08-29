@@ -3,17 +3,22 @@
 import { useCallback, useEffect, useState } from "react";
 
 const STORAGE_KEY = "fpl-assistant-team-id";
+/** Default FPL entry when no team ID is saved. */
+export const DEFAULT_TEAM_ID = "3216795";
 
 export function useTeamId() {
-  const [teamId, setTeamIdState] = useState<string>("");
+  const [teamId, setTeamIdState] = useState<string>(DEFAULT_TEAM_ID);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("teamId") || params.get("entry");
     const fromStorage = window.localStorage.getItem(STORAGE_KEY);
-    const initial = fromQuery || fromStorage || "";
+    const initial = fromQuery || fromStorage || DEFAULT_TEAM_ID;
     setTeamIdState(initial);
+    if (!fromQuery && !fromStorage) {
+      window.localStorage.setItem(STORAGE_KEY, DEFAULT_TEAM_ID);
+    }
     setReady(true);
   }, []);
 
@@ -36,5 +41,11 @@ export function useTeamId() {
 
   const clearTeamId = useCallback(() => setTeamId(""), [setTeamId]);
 
-  return { teamId, setTeamId, clearTeamId, ready, numericId: Number(teamId) || null };
+  return {
+    teamId,
+    setTeamId,
+    clearTeamId,
+    ready,
+    numericId: Number(teamId) || null,
+  };
 }

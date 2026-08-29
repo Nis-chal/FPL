@@ -46,10 +46,7 @@ export default async function HomePage() {
           Expected points outlook
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Always tracks the latest FPL gameweek
-          {nextEvent ? ` (next: ${nextEvent.name})` : ""}. Analyze by price,
-          start chance, xPts, xGI/90, win/CS, or fixtures. Add your team ID for
-          personal transfers and a squad rating.
+          Latest GW{nextEvent ? ` · next ${nextEvent.name}` : ""}.
         </p>
       </div>
 
@@ -59,34 +56,60 @@ export default async function HomePage() {
         nextEvent={nextEvent}
       />
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Link
-          href="/clubs"
+          href="/points"
           className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
         >
-          <h3 className="font-bold text-zinc-100">Clubs & fixtures</h3>
+          <h3 className="font-bold text-zinc-100">Points</h3>
           <p className="mt-2 text-sm text-zinc-500">
-            Next 7 games and recent results for every Premier League club.
+            Your FPL team with this gameweek&apos;s points and transfers.
           </p>
         </Link>
         <Link
-          href="/transfers"
+          href="/ai"
           className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
         >
-          <h3 className="font-bold text-zinc-100">Transfer targets</h3>
+          <h3 className="font-bold text-zinc-100">AI</h3>
           <p className="mt-2 text-sm text-zinc-500">
-            Best inbound picks league-wide, or personal out→in swaps with your
-            team ID.
+            AI £100m squad, manager transfers, and bench swaps.
+          </p>
+        </Link>
+        <Link
+          href="/recommend"
+          className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
+        >
+          <h3 className="font-bold text-zinc-100">Recommend</h3>
+          <p className="mt-2 text-sm text-zinc-500">
+            Best XI, chip timing, captain, and transfer ideas.
           </p>
         </Link>
         <Link
           href="/squad"
           className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
         >
-          <h3 className="font-bold text-zinc-100">Best squad</h3>
+          <h3 className="font-bold text-zinc-100">Squad</h3>
           <p className="mt-2 text-sm text-zinc-500">
-            Model XV for the next run of fixtures ({bestSquad.formation},{" "}
+            Edit the £100m XI ({bestSquad.formation},{" "}
             {formatPrice(bestSquad.totalCost)}).
+          </p>
+        </Link>
+        <Link
+          href="/transfers"
+          className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
+        >
+          <h3 className="font-bold text-zinc-100">Transfers</h3>
+          <p className="mt-2 text-sm text-zinc-500">
+            League targets or your team ID for personal swaps.
+          </p>
+        </Link>
+        <Link
+          href="/clubs"
+          className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 transition hover:border-emerald-500/40"
+        >
+          <h3 className="font-bold text-zinc-100">Clubs</h3>
+          <p className="mt-2 text-sm text-zinc-500">
+            Fixtures and form for every Premier League club.
           </p>
         </Link>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { HorizonFilter } from "@/components/HorizonFilter";
 import {
   CHIP_OPTIONS,
@@ -309,6 +309,7 @@ export function AnalysisFilters({
   onChipChange,
   formation,
   onFormationChange,
+  trailing,
 }: {
   horizon: number;
   onHorizonChange: (horizon: number) => void;
@@ -323,6 +324,8 @@ export function AnalysisFilters({
   onChipChange: (chip: ChipMode) => void;
   formation: FormationPreference;
   onFormationChange: (formation: FormationPreference) => void;
+  /** Extra controls on the same row (e.g. team ID search). */
+  trailing?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const titleId = useId();
@@ -361,7 +364,7 @@ export function AnalysisFilters({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2 text-sm font-semibold text-zinc-100 transition hover:border-emerald-500/50 hover:bg-zinc-900"
+          className="inline-flex shrink-0 items-center gap-2 rounded-xl border border-zinc-700 bg-zinc-950 px-3.5 py-2 text-sm font-semibold text-zinc-100 transition hover:border-emerald-500/50 hover:bg-zinc-900"
         >
           <svg
             aria-hidden
@@ -382,12 +385,17 @@ export function AnalysisFilters({
             </span>
           )}
         </button>
-        <p className="min-w-0 flex-1 truncate text-xs text-zinc-500">{summary}</p>
+        {trailing}
+        {!trailing && (
+          <p className="min-w-0 flex-1 truncate text-xs text-zinc-500">
+            {summary}
+          </p>
+        )}
         {showReset && onReset && (
           <button
             type="button"
             onClick={onReset}
-            className="text-xs font-medium text-emerald-400 hover:text-emerald-300"
+            className="shrink-0 text-xs font-medium text-emerald-400 hover:text-emerald-300"
           >
             Reset
           </button>
