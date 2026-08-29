@@ -5,7 +5,7 @@ import { ClubKit } from "@/components/PlayerMedia";
 import { PlayerLink } from "@/components/PlayerDrawer";
 import { TipTrigger } from "@/components/ui";
 import {
-  pointsForGameweek,
+  playerCurrentGwPoints,
   squadCurrentGwPoints,
   squadSeasonPoints,
 } from "@/lib/season-accumulated";
@@ -56,10 +56,11 @@ function EmptySlot({
 function runningGwPoints(
   player: ScoredPlayer,
   currentGameweek?: number,
+  isCaptain?: boolean,
 ): number | null {
-  if (player.livePoints != null) return player.livePoints;
-  if (currentGameweek == null) return null;
-  return pointsForGameweek(player.gwPointsHistory, currentGameweek);
+  const base = playerCurrentGwPoints(player, currentGameweek);
+  if (base == null) return null;
+  return isCaptain ? base * 2 : base;
 }
 
 function PitchPlayerCard({
@@ -83,7 +84,7 @@ function PitchPlayerCard({
 }) {
   const overall = playerOverall(player);
   const pts = displayProjected(player, { isCaptain });
-  const gwPts = runningGwPoints(player, currentGameweek);
+  const gwPts = runningGwPoints(player, currentGameweek, isCaptain);
   void horizon;
 
   return (
@@ -262,9 +263,11 @@ export function PitchView({
   ];
   const formation = formationFromXi(startingXi);
   const total = xiProjectedTotal(startingXi, captainId);
-  const squad = [...startingXi, ...bench];
-  const seasonTotal = squadSeasonPoints(squad);
-  const gwTotal = squadCurrentGwPoints(squad, currentGameweek);
+  const seasonTotal = squadSeasonPoints([...startingXi, ...bench]);
+  // XI with captain ×2 + bench (no armband) — matches classic scoring without BB.
+  const gwTotal =
+    squadCurrentGwPoints(startingXi, currentGameweek, captainId) +
+    squadCurrentGwPoints(bench, currentGameweek);
 
   return (
     <div className="space-y-4">

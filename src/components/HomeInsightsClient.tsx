@@ -26,10 +26,12 @@ export function HomeInsightsClient({
   allPlayers,
   currentEvent,
   nextEvent,
+  pointsEvent,
 }: {
   allPlayers: ScoredPlayer[];
   currentEvent: FplEvent | null;
   nextEvent: FplEvent | null;
+  pointsEvent?: FplEvent | null;
 }) {
   const { seasonBasis, setSeasonBasis, includeAccumulated } =
     useAccumulatedPoints(false);
@@ -166,7 +168,7 @@ export function HomeInsightsClient({
       <AiSquadHomeCard
         players={scored}
         horizon={horizon}
-        currentGameweek={currentEvent?.id}
+        currentGameweek={pointsEvent?.id ?? currentEvent?.id}
       />
 
       <BestFormationCard formations={formations} horizon={horizon} />

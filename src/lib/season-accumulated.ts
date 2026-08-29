@@ -51,24 +51,31 @@ export function playerSeasonPoints(player: ScoredPlayer): number {
   return player.seasonPointsAccumulated ?? player.totalPoints;
 }
 
-/** This gameweek's points for one player (live preferred). */
+/** This gameweek's points for one player (live → history → bootstrap event_points). */
 export function playerCurrentGwPoints(
   player: ScoredPlayer,
   gameweek?: number,
 ): number | null {
   if (player.livePoints != null) return player.livePoints;
-  if (gameweek == null) return null;
-  return pointsForGameweek(player.gwPointsHistory, gameweek);
+  if (gameweek != null) {
+    const fromHistory = pointsForGameweek(player.gwPointsHistory, gameweek);
+    if (fromHistory != null) return fromHistory;
+  }
+  // Bootstrap `event_points` tracks FPL is_current — use when history lacks that GW.
+  if (player.eventPoints != null) return player.eventPoints;
+  return null;
 }
 
-/** Sum of this gameweek's points for a squad. */
+/** Sum of this gameweek's points; captain is doubled when captainId is set. */
 export function squadCurrentGwPoints(
   players: ScoredPlayer[],
   gameweek?: number,
+  captainId?: number,
 ): number {
   return players.reduce((sum, p) => {
     const pts = playerCurrentGwPoints(p, gameweek);
-    return sum + (pts ?? 0);
+    if (pts == null) return sum;
+    return sum + (captainId != null && p.id === captainId ? pts * 2 : pts);
   }, 0);
 }
 

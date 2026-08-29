@@ -69,6 +69,8 @@ export interface FplElement {
   chance_of_playing_this_round: number | null;
   ep_next: string | null;
   ep_this: string | null;
+  /** Points in the FPL `is_current` event (updates live / after matches). */
+  event_points: number;
   value_form: string;
   value_season: string;
   photo: string;
@@ -342,6 +344,8 @@ export interface ScoredPlayer {
   livePoints?: number | null;
   /** Live GW minutes so far (when overlay applied). */
   liveMinutes?: number | null;
+  /** Bootstrap points in FPL's current scoring event (`event_points`). */
+  eventPoints?: number;
   recentAvgPoints: number;
   recentGames: number;
   nextDifficulty: number | null;

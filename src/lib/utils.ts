@@ -92,6 +92,28 @@ export function getCurrentEvent(events: FplEvent[]): FplEvent | undefined {
   return [...events].sort((a, b) => b.id - a.id)[0];
 }
 
+/**
+ * Gameweek whose points belong on pitch cards / GW totals.
+ * Uses FPL `is_current` even after it finishes — do not roll to `is_next`
+ * (that week has no scores yet; bootstrap `event_points` still maps here).
+ */
+export function getPointsEvent(events: FplEvent[]): FplEvent | undefined {
+  if (!events.length) return undefined;
+
+  const markedCurrent = events.find((e) => e.is_current);
+  if (markedCurrent) return markedCurrent;
+
+  const markedPrevious = events.find((e) => e.is_previous);
+  if (markedPrevious) return markedPrevious;
+
+  const latestFinished = [...events]
+    .filter((e) => e.finished)
+    .sort((a, b) => b.id - a.id)[0];
+  if (latestFinished) return latestFinished;
+
+  return getCurrentEvent(events);
+}
+
 /** Gameweek after the active one (for “next” fixtures / deadlines). */
 export function getNextEvent(events: FplEvent[]): FplEvent | undefined {
   const current = getCurrentEvent(events);

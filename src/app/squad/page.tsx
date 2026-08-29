@@ -14,7 +14,7 @@ export default async function SquadPage() {
         </div>
         <SquadPageClient
           allPlayers={insights.scored}
-          currentGameweek={insights.currentEvent?.id ?? 1}
+          currentGameweek={insights.pointsEvent?.id ?? insights.currentEvent?.id ?? 1}
           initialHorizon={5}
         />
       </div>

@@ -16,7 +16,7 @@ export default async function AiPage() {
           allPlayers={insights.scored}
           initialHorizon={5}
           seasonPointsFromDatabase={insights.seasonPointsFromDatabase ?? false}
-          currentGameweek={insights.currentEvent?.id ?? 1}
+          currentGameweek={insights.pointsEvent?.id ?? insights.currentEvent?.id ?? 1}
         />
       </div>
     );

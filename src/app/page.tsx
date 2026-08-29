@@ -22,7 +22,7 @@ export default async function HomePage() {
     );
   }
 
-  const { currentEvent, nextEvent, scored, bestSquad } = insights;
+  const { currentEvent, nextEvent, pointsEvent, scored, bestSquad } = insights;
   const gwLabel = currentEvent?.name ?? "Current gameweek";
   const deadline =
     currentEvent?.deadline_time != null
@@ -54,6 +54,7 @@ export default async function HomePage() {
         allPlayers={scored}
         currentEvent={currentEvent}
         nextEvent={nextEvent}
+        pointsEvent={pointsEvent}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

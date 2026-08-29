@@ -16,6 +16,7 @@ import type { PastSeasonStats, ScoredPlayer } from "@/lib/types";
 import {
   getCurrentEvent,
   getNextEvent,
+  getPointsEvent,
   nextFixturesForTeam,
   recentFixturesForTeam,
   headToHeadFixtures,
@@ -36,6 +37,7 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
   ]);
   const currentEvent = getCurrentEvent(bootstrap.events) ?? null;
   const nextEvent = getNextEvent(bootstrap.events) ?? null;
+  const pointsEvent = getPointsEvent(bootstrap.events) ?? null;
   let scored = scorePlayers(bootstrap, fixtures, horizon, includeAccumulated);
   scored = await enrichPlayersWithApiFootball(
     scored,
@@ -63,6 +65,7 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     includeAccumulated,
     currentEvent,
     nextEvent,
+    pointsEvent,
     finishedGameweeks: bootstrap.events
       .filter((e) => e.finished)
       .map((e) => e.id)
@@ -337,6 +340,8 @@ export async function getEntryInsights(
     scored,
     seasonFromEvent(getCurrentEvent(bootstrap.events)),
   );
+  const seasonPoints = await enrichScoredWithSeasonPoints(scored);
+  scored = seasonPoints.players;
   const byId = new Map(scored.map((p) => [p.id, p]));
   const squad = picks.picks
     .map((pick) => byId.get(pick.element))

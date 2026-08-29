@@ -15,7 +15,7 @@ export default async function RecommendPage() {
         <RecommendClient
           allPlayers={insights.scored}
           upcomingGameweeks={insights.upcomingGameweeks}
-          currentGameweek={insights.currentEvent?.id ?? 1}
+          currentGameweek={insights.pointsEvent?.id ?? insights.currentEvent?.id ?? 1}
           horizon={5}
         />
       </div>

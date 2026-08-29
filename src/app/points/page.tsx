@@ -7,7 +7,7 @@ export const revalidate = 60;
 export default async function PointsPage() {
   try {
     const insights = await getLeagueInsights(5);
-    const gw = insights.currentEvent?.id ?? 1;
+    const gw = insights.pointsEvent?.id ?? insights.currentEvent?.id ?? 1;
     return (
       <div className="space-y-6">
         <div>

@@ -190,6 +190,7 @@ function scoreOne(
     price: el.now_cost,
     selectedBy: parseFloatSafe(el.selected_by_percent),
     totalPoints: el.total_points,
+    eventPoints: el.event_points ?? 0,
     form: parseFloatSafe(el.form),
     minutes: el.minutes,
     status: el.status,
