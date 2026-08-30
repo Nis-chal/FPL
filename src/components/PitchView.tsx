@@ -17,6 +17,7 @@ import {
   playerOverall,
   xiProjectedTotal,
 } from "@/lib/pitch";
+import { formatPrice } from "@/lib/utils";
 
 function EmptySlot({
   position,
@@ -28,7 +29,7 @@ function EmptySlot({
   onRestore: () => void;
 }) {
   return (
-    <div className="relative flex h-[7.75rem] w-[4.75rem] shrink-0 flex-col items-center sm:h-[8.25rem] sm:w-[5.5rem]">
+    <div className="relative flex h-[8.25rem] w-[4.75rem] shrink-0 flex-col items-center sm:h-[8.75rem] sm:w-[5.5rem]">
       <button
         type="button"
         onClick={onRestore}
@@ -99,7 +100,7 @@ function PitchPlayerCard({
         }
       }}
       className={[
-        "group relative flex h-[7.75rem] w-[4.75rem] shrink-0 cursor-pointer flex-col items-center overflow-visible rounded-xl border px-1 pb-1 pt-2 text-center shadow-lg transition sm:h-[8.25rem] sm:w-[5.5rem]",
+        "group relative flex h-[8.25rem] w-[4.75rem] shrink-0 cursor-pointer flex-col items-center overflow-visible rounded-xl border px-1 pb-1 pt-2 text-center shadow-lg transition sm:h-[8.75rem] sm:w-[5.5rem]",
         selected
           ? "border-amber-400 bg-amber-500/20 ring-2 ring-amber-400/50"
           : "border-emerald-700/60 bg-zinc-950/85 hover:border-emerald-400",
@@ -148,6 +149,9 @@ function PitchPlayerCard({
       <div className="mt-1 line-clamp-1 w-full px-0.5 text-[10px] font-bold leading-tight text-zinc-50 sm:text-[11px]">
         {player.webName}
       </div>
+      <div className="text-[9px] font-semibold leading-none text-amber-200/90">
+        {formatPrice(player.price)}
+      </div>
       <div
         className="mt-0.5 text-[11px] font-bold leading-none text-sky-300 sm:text-xs"
         title="Current gameweek points"
@@ -172,7 +176,7 @@ function PitchRow({
   selectedId,
   onSelect,
   onRemove,
-  removedId,
+  removedIds,
   onFillSlot,
   onRestoreSlot,
   captainId,
@@ -184,23 +188,24 @@ function PitchRow({
   selectedId: number | null;
   onSelect: (id: number) => void;
   onRemove?: (id: number) => void;
-  removedId?: number | null;
-  onFillSlot?: () => void;
-  onRestoreSlot?: () => void;
+  removedIds?: number[];
+  onFillSlot?: (id: number) => void;
+  onRestoreSlot?: (id: number) => void;
   captainId?: number;
   viceId?: number;
   horizon: number;
   currentGameweek?: number;
 }) {
+  const removed = new Set(removedIds ?? []);
   return (
     <div className="flex flex-wrap items-stretch justify-center gap-2 sm:gap-3">
       {players.map((p) =>
-        removedId === p.id && onFillSlot && onRestoreSlot ? (
+        removed.has(p.id) && onFillSlot && onRestoreSlot ? (
           <EmptySlot
             key={p.id}
             position={p.position}
-            onFill={onFillSlot}
-            onRestore={onRestoreSlot}
+            onFill={() => onFillSlot(p.id)}
+            onRestore={() => onRestoreSlot(p.id)}
           />
         ) : (
           <PitchPlayerCard
@@ -229,7 +234,7 @@ export function PitchView({
   selectedId,
   onSelect,
   onRemove,
-  removedId,
+  removedIds,
   onFillSlot,
   onRestoreSlot,
   title,
@@ -245,9 +250,9 @@ export function PitchView({
   selectedId: number | null;
   onSelect: (id: number) => void;
   onRemove?: (id: number) => void;
-  removedId?: number | null;
-  onFillSlot?: () => void;
-  onRestoreSlot?: () => void;
+  removedIds?: number[];
+  onFillSlot?: (id: number) => void;
+  onRestoreSlot?: (id: number) => void;
   title: string;
   ratingScore?: number;
   ratingGrade?: string;
@@ -280,8 +285,8 @@ export function PitchView({
               <TipTrigger
                 tip={
                   <p className="text-xs text-zinc-300">
-                    × remove · tap empty slot to transfer · tap pitch ↔ bench to
-                    swap
+                    × remove several · tap an empty slot to transfer · tap pitch
+                    ↔ bench to swap
                   </p>
                 }
               >
@@ -352,7 +357,7 @@ export function PitchView({
                 selectedId={selectedId}
                 onSelect={onSelect}
                 onRemove={onRemove}
-                removedId={removedId}
+                removedIds={removedIds}
                 onFillSlot={onFillSlot}
                 onRestoreSlot={onRestoreSlot}
                 captainId={captainId}
@@ -378,11 +383,11 @@ export function PitchView({
               <span className="text-[10px] font-bold text-zinc-500">
                 {index + 1}
               </span>
-              {removedId === p.id && onFillSlot && onRestoreSlot ? (
+              {removedIds?.includes(p.id) && onFillSlot && onRestoreSlot ? (
                 <EmptySlot
                   position={p.position}
-                  onFill={onFillSlot}
-                  onRestore={onRestoreSlot}
+                  onFill={() => onFillSlot(p.id)}
+                  onRestore={() => onRestoreSlot(p.id)}
                 />
               ) : (
                 <PitchPlayerCard

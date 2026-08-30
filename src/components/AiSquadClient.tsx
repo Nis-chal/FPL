@@ -182,7 +182,8 @@ export function AiSquadClient({
   const [lineup, setLineup] = useState<LineupState | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [removedId, setRemovedId] = useState<number | null>(null);
+  const [removedIds, setRemovedIds] = useState<number[]>([]);
+  const [fillId, setFillId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
   const [transfersOpen, setTransfersOpen] = useState(true);
@@ -376,9 +377,8 @@ export function AiSquadClient({
     [selectedId, active, lineup, commitLineup],
   );
 
-  const removedPlayer = removedId
-    ? squad.find((p) => p.id === removedId) ?? null
-    : null;
+  const removedPlayer =
+    fillId != null ? squad.find((p) => p.id === fillId) ?? null : null;
 
   if (!loaded && !lineup) {
     return (
@@ -473,17 +473,25 @@ export function AiSquadClient({
             viceId={active.viceId}
             horizon={horizon}
             selectedId={selectedId}
-            removedId={removedId}
+            removedIds={removedIds}
             onRemove={(id) => {
               setSelectedId(null);
-              setRemovedId(id);
+              setRemovedIds((prev) =>
+                prev.includes(id) ? prev : [...prev, id],
+              );
               setDrawerOpen(false);
-              setHint("Removed — tap empty slot to replace");
+              setHint("Removed — tap empty slots to replace (you can × several).");
             }}
-            onFillSlot={() => removedId != null && setDrawerOpen(true)}
-            onRestoreSlot={() => {
-              setRemovedId(null);
-              setDrawerOpen(false);
+            onFillSlot={(id) => {
+              setFillId(id);
+              setDrawerOpen(true);
+            }}
+            onRestoreSlot={(id) => {
+              setRemovedIds((prev) => prev.filter((x) => x !== id));
+              if (fillId === id) {
+                setFillId(null);
+                setDrawerOpen(false);
+              }
             }}
             onSelect={handleSelect}
             ratingGrade={rating.grade}
@@ -550,11 +558,11 @@ export function AiSquadClient({
             setHint("Tap + to transfer, or ↩ to restore");
           }}
           onTransferIn={(player) => {
-            if (!lineup || removedId == null) return;
+            if (!lineup || fillId == null) return;
             const result = applySquadTransfer(
               lineup.startingXi,
               lineup.bench,
-              removedId,
+              fillId,
               player,
               BUDGET,
             );
@@ -572,7 +580,8 @@ export function AiSquadClient({
               bench: result.bench,
               ...arms,
             });
-            setRemovedId(null);
+            setRemovedIds((prev) => prev.filter((x) => x !== fillId));
+            setFillId(null);
             setDrawerOpen(false);
             setHint(`Signed ${player.webName}`);
           }}

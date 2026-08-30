@@ -25,7 +25,8 @@ export default async function ClubsPage() {
         <div>
           <h1 className="text-3xl font-bold text-zinc-50">Clubs</h1>
           <p className="mt-2 text-sm text-zinc-400">
-            Ranked by easiest upcoming fixtures. Choose 1–7 games to look ahead.
+            Fixtures and recent results. Optionally rank by easiest upcoming run
+            (1–7 games).
           </p>
         </div>
         <ClubsClient clubs={clubs} />

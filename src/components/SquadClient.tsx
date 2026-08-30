@@ -113,9 +113,11 @@ export function SquadClient({
 
   const [modelSelected, setModelSelected] = useState<number | null>(null);
   const [personalSelected, setPersonalSelected] = useState<number | null>(null);
-  const [modelRemovedId, setModelRemovedId] = useState<number | null>(null);
+  const [modelRemovedIds, setModelRemovedIds] = useState<number[]>([]);
+  const [modelFillId, setModelFillId] = useState<number | null>(null);
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
-  const [personalRemovedId, setPersonalRemovedId] = useState<number | null>(null);
+  const [personalRemovedIds, setPersonalRemovedIds] = useState<number[]>([]);
+  const [personalFillId, setPersonalFillId] = useState<number | null>(null);
   const [personalDrawerOpen, setPersonalDrawerOpen] = useState(false);
   const [modelLineup, setModelLineup] = useState<LineupState | null>(null);
   const [personalLineup, setPersonalLineup] = useState<LineupState | null>(null);
@@ -175,7 +177,8 @@ export function SquadClient({
       viceId: built.viceCaptain.id,
     });
     setModelSelected(null);
-    setModelRemovedId(null);
+    setModelRemovedIds([]);
+    setModelFillId(null);
     setModelDrawerOpen(false);
     setSwapHint(
       `Rebuilt · ${formatPrice(built.bank)} bank`,
@@ -219,7 +222,8 @@ export function SquadClient({
       setTransferHint(null);
       setError(null);
       setPersonalSelected(null);
-      setPersonalRemovedId(null);
+      setPersonalRemovedIds([]);
+      setPersonalFillId(null);
       setPersonalDrawerOpen(false);
       return;
     }
@@ -257,7 +261,8 @@ export function SquadClient({
           viceId: vice,
         });
         setPersonalSelected(null);
-        setPersonalRemovedId(null);
+        setPersonalRemovedIds([]);
+        setPersonalFillId(null);
         setPersonalDrawerOpen(false);
       })
       .catch((err: Error) => {
@@ -309,13 +314,13 @@ export function SquadClient({
     [],
   );
 
-  const clearModelSlot = useCallback(() => {
-    setModelRemovedId(null);
+  const closeModelDrawer = useCallback(() => {
+    setModelFillId(null);
     setModelDrawerOpen(false);
   }, []);
 
-  const clearPersonalSlot = useCallback(() => {
-    setPersonalRemovedId(null);
+  const closePersonalDrawer = useCallback(() => {
+    setPersonalFillId(null);
     setPersonalDrawerOpen(false);
   }, []);
 
@@ -323,21 +328,14 @@ export function SquadClient({
   const handleRemovePlayer = useCallback(
     (
       id: number,
-      removedId: number | null,
-      setRemovedId: (id: number | null) => void,
+      setRemovedIds: (fn: (prev: number[]) => number[]) => void,
       setDrawerOpen: (open: boolean) => void,
       setSwapSelected: (id: number | null) => void,
     ) => {
       setSwapSelected(null);
       setDrawerOpen(false);
-      if (removedId === id) {
-        // × on already-removed path shouldn't happen; restore
-        setRemovedId(null);
-        setSwapHint(null);
-        return;
-      }
-      setRemovedId(id);
-      setSwapHint("Removed — tap empty slot to transfer.");
+      setRemovedIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setSwapHint("Removed — tap empty slots to transfer (you can × several).");
     },
     [],
   );
@@ -350,9 +348,7 @@ export function SquadClient({
       setLineup: (next: LineupState) => void,
       selected: number | null,
       setSelected: (id: number | null) => void,
-      clearTransfer: () => void,
     ) => {
-      clearTransfer();
       if (selected === null) {
         setSelected(id);
         setSwapHint("Tap pitch ↔ bench to swap.");
@@ -405,15 +401,17 @@ export function SquadClient({
     );
   }, [personalLineup, personalRating, horizon]);
 
-  const modelOut = modelRemovedId
-    ? modelSquad.find((p) => p.id === modelRemovedId) ?? null
-    : null;
+  const modelOut =
+    modelFillId != null
+      ? modelSquad.find((p) => p.id === modelFillId) ?? null
+      : null;
   const personalSquad = personalLineup
     ? [...personalLineup.startingXi, ...personalLineup.bench]
     : [];
-  const personalOut = personalRemovedId
-    ? personalSquad.find((p) => p.id === personalRemovedId) ?? null
-    : null;
+  const personalOut =
+    personalFillId != null
+      ? personalSquad.find((p) => p.id === personalFillId) ?? null
+      : null;
   const personalTotalCost = personalSquad.reduce((sum, p) => sum + p.price, 0);
   const personalBank = BUDGET - personalTotalCost;
 
@@ -432,10 +430,15 @@ export function SquadClient({
         setPersonalLineup,
         suggestion.out.id,
         suggestion.in,
-        clearPersonalSlot,
+        () => {
+          setPersonalRemovedIds((prev) =>
+            prev.filter((id) => id !== suggestion.out.id),
+          );
+          closePersonalDrawer();
+        },
       );
     },
-    [personalLineup, applyTransferToLineup, clearPersonalSlot],
+    [personalLineup, applyTransferToLineup, closePersonalDrawer],
   );
 
   return (
@@ -509,23 +512,24 @@ export function SquadClient({
           viceId={activeModel.viceId}
           horizon={horizon}
           selectedId={modelSelected}
-          removedId={modelRemovedId}
+          removedIds={modelRemovedIds}
           onRemove={(id) =>
             handleRemovePlayer(
               id,
-              modelRemovedId,
-              setModelRemovedId,
+              setModelRemovedIds,
               setModelDrawerOpen,
               setModelSelected,
             )
           }
-          onFillSlot={() => {
-            if (modelRemovedId != null) {
-              setModelDrawerOpen(true);
-              setSwapHint("Pick a replacement in the drawer.");
-            }
+          onFillSlot={(id) => {
+            setModelFillId(id);
+            setModelDrawerOpen(true);
+            setSwapHint("Pick a replacement in the drawer.");
           }}
-          onRestoreSlot={clearModelSlot}
+          onRestoreSlot={(id) => {
+            setModelRemovedIds((prev) => prev.filter((x) => x !== id));
+            if (modelFillId === id) closeModelDrawer();
+          }}
           onSelect={(id) =>
             handleSelect(
               "model",
@@ -534,7 +538,6 @@ export function SquadClient({
               setModelLineup,
               modelSelected,
               setModelSelected,
-              clearModelSlot,
             )
           }
           ratingGrade={modelRating.grade}
@@ -630,7 +633,12 @@ export function SquadClient({
               setModelLineup,
               modelOut.id,
               player,
-              clearModelSlot,
+              () => {
+                setModelRemovedIds((prev) =>
+                  prev.filter((id) => id !== modelOut.id),
+                );
+                closeModelDrawer();
+              },
             )
           }
         />
@@ -658,23 +666,24 @@ export function SquadClient({
             viceId={personalLineup.viceId}
             horizon={horizon}
             selectedId={personalSelected}
-            removedId={personalRemovedId}
+            removedIds={personalRemovedIds}
             onRemove={(id) =>
               handleRemovePlayer(
                 id,
-                personalRemovedId,
-                setPersonalRemovedId,
+                setPersonalRemovedIds,
                 setPersonalDrawerOpen,
                 setPersonalSelected,
               )
             }
-            onFillSlot={() => {
-              if (personalRemovedId != null) {
-                setPersonalDrawerOpen(true);
-                setSwapHint("Pick a replacement in the drawer.");
-              }
+            onFillSlot={(id) => {
+              setPersonalFillId(id);
+              setPersonalDrawerOpen(true);
+              setSwapHint("Pick a replacement in the drawer.");
             }}
-            onRestoreSlot={clearPersonalSlot}
+            onRestoreSlot={(id) => {
+              setPersonalRemovedIds((prev) => prev.filter((x) => x !== id));
+              if (personalFillId === id) closePersonalDrawer();
+            }}
             onSelect={(id) =>
               handleSelect(
                 "personal",
@@ -683,7 +692,6 @@ export function SquadClient({
                 setPersonalLineup,
                 personalSelected,
                 setPersonalSelected,
-                clearPersonalSlot,
               )
             }
             ratingGrade={livePersonalRating?.grade}
@@ -773,7 +781,12 @@ export function SquadClient({
               setPersonalLineup,
               personalOut.id,
               player,
-              clearPersonalSlot,
+              () => {
+                setPersonalRemovedIds((prev) =>
+                  prev.filter((id) => id !== personalOut.id),
+                );
+                closePersonalDrawer();
+              },
             )
           }
         />

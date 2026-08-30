@@ -85,7 +85,8 @@ export function PointsClient({
   const [personalRating, setPersonalRating] = useState<TeamRating | null>(null);
   const [personalLineup, setPersonalLineup] = useState<LineupState | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [removedId, setRemovedId] = useState<number | null>(null);
+  const [removedIds, setRemovedIds] = useState<number[]>([]);
+  const [fillId, setFillId] = useState<number | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
@@ -134,6 +135,9 @@ export function PointsClient({
           captainId: captain ?? 0,
           viceId: vice ?? 0,
         });
+        setRemovedIds([]);
+        setFillId(null);
+        setDrawerOpen(false);
         setError(null);
       })
       .catch((err) => {
@@ -241,8 +245,8 @@ export function PointsClient({
   );
 
   const removed =
-    removedId != null
-      ? personalSquad.find((p) => p.id === removedId) ?? null
+    fillId != null
+      ? personalSquad.find((p) => p.id === fillId) ?? null
       : null;
 
   return (
@@ -286,16 +290,25 @@ export function PointsClient({
               viceId={personalLineup.viceId}
               horizon={horizon}
               selectedId={selectedId}
-              removedId={removedId}
+              removedIds={removedIds}
               onRemove={(id) => {
                 setSelectedId(null);
-                setRemovedId(id);
+                setRemovedIds((prev) =>
+                  prev.includes(id) ? prev : [...prev, id],
+                );
                 setDrawerOpen(false);
+                setHint("Removed — tap empty slots to transfer (you can × several).");
               }}
-              onFillSlot={() => removedId != null && setDrawerOpen(true)}
-              onRestoreSlot={() => {
-                setRemovedId(null);
-                setDrawerOpen(false);
+              onFillSlot={(id) => {
+                setFillId(id);
+                setDrawerOpen(true);
+              }}
+              onRestoreSlot={(id) => {
+                setRemovedIds((prev) => prev.filter((x) => x !== id));
+                if (fillId === id) {
+                  setFillId(null);
+                  setDrawerOpen(false);
+                }
               }}
               onSelect={handleSelect}
               ratingGrade={liveRating?.grade}
@@ -364,6 +377,7 @@ export function PointsClient({
           budget={BUDGET}
           onClose={() => setDrawerOpen(false)}
           onTransferIn={(player) => {
+            if (!removed) return;
             const result = applySquadTransfer(
               personalLineup.startingXi,
               personalLineup.bench,
@@ -385,7 +399,8 @@ export function PointsClient({
               bench: result.bench,
               ...arms,
             });
-            setRemovedId(null);
+            setRemovedIds((prev) => prev.filter((x) => x !== removed.id));
+            setFillId(null);
             setDrawerOpen(false);
             setHint(`Signed ${player.webName}`);
           }}

@@ -1,14 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { FixtureStrip } from "@/components/FixturePill";
-import { HorizonFilter } from "@/components/HorizonFilter";
 import { Card } from "@/components/ui";
 import type { FixtureView } from "@/lib/types";
 
 const CLUB_HORIZONS = [1, 2, 3, 4, 5, 6, 7] as const;
-const HORIZON_KEY = "fpl-assistant-clubs-horizon";
 
 export type ClubListItem = {
   id: number;
@@ -46,62 +44,92 @@ function avgTone(avg: number): string {
 }
 
 export function ClubsClient({ clubs }: { clubs: ClubListItem[] }) {
-  const [horizon, setHorizonState] = useState(5);
+  /** null = A–Z list, no FDR ranking */
+  const [horizon, setHorizon] = useState<number | null>(null);
 
-  useEffect(() => {
-    const stored = Number(window.localStorage.getItem(HORIZON_KEY));
-    if (Number.isFinite(stored) && stored >= 1 && stored <= 7) {
-      setHorizonState(stored);
+  const rows = useMemo(() => {
+    const mapped = clubs.map((club) => {
+      const upcoming = planningFixtures(club.upcoming);
+      const recent = lastFiveWithCurrent(club.recent, club.upcoming);
+      return {
+        club: { ...club, upcoming, recent },
+        avgFdr: averageFdr(upcoming, horizon ?? 7),
+      };
+    });
+    if (horizon == null) {
+      return mapped.sort((a, b) => a.club.name.localeCompare(b.club.name));
     }
-  }, []);
-
-  const setHorizon = (next: number) => {
-    setHorizonState(next);
-    window.localStorage.setItem(HORIZON_KEY, String(next));
-  };
-
-  const ranked = useMemo(() => {
-    return clubs
-      .map((club) => {
-        const upcoming = planningFixtures(club.upcoming);
-        const recent = lastFiveWithCurrent(club.recent, club.upcoming);
-        return {
-          club: { ...club, upcoming, recent },
-          avgFdr: averageFdr(upcoming, horizon),
-        };
-      })
-      .sort((a, b) => {
-        if (a.avgFdr !== b.avgFdr) return a.avgFdr - b.avgFdr;
-        return a.club.name.localeCompare(b.club.name);
-      });
+    return mapped.sort((a, b) => {
+      if (a.avgFdr !== b.avgFdr) return a.avgFdr - b.avgFdr;
+      return a.club.name.localeCompare(b.club.name);
+    });
   }, [clubs, horizon]);
+
+  const stripLimit = horizon ?? 7;
+  const ranking = horizon != null;
 
   return (
     <div className="space-y-4">
-      <HorizonFilter
-        value={horizon}
-        onChange={setHorizon}
-        horizons={CLUB_HORIZONS}
-        label="Best upcoming"
-        hint="games · easiest FDR first"
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Best upcoming
+        </span>
+        <div className="flex rounded-lg border border-zinc-700 bg-zinc-950 p-0.5">
+          <button
+            type="button"
+            onClick={() => setHorizon(null)}
+            className={[
+              "rounded-md px-2.5 py-1 text-sm font-semibold transition",
+              horizon == null
+                ? "bg-emerald-500 text-zinc-950"
+                : "text-zinc-400 hover:text-zinc-100",
+            ].join(" ")}
+          >
+            Off
+          </button>
+          {CLUB_HORIZONS.map((h) => (
+            <button
+              key={h}
+              type="button"
+              onClick={() => setHorizon(h)}
+              className={[
+                "rounded-md px-2.5 py-1 text-sm font-semibold transition",
+                horizon === h
+                  ? "bg-emerald-500 text-zinc-950"
+                  : "text-zinc-400 hover:text-zinc-100",
+              ].join(" ")}
+            >
+              {h}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-zinc-500">
+          {ranking ? "easiest FDR first" : "A–Z · optional rank"}
+        </span>
+      </div>
       <div className="grid gap-4 md:grid-cols-2">
-        {ranked.map(({ club, avgFdr }, index) => (
+        {rows.map(({ club, avgFdr }, index) => (
           <Card
             key={club.id}
             title={club.name}
-            subtitle={`${club.shortName} · #${index + 1} easiest next ${horizon}`}
+            subtitle={
+              ranking
+                ? `${club.shortName} · #${index + 1} easiest next ${horizon}`
+                : club.shortName
+            }
             action={
               <div className="flex flex-col items-end gap-1">
-                <span
-                  className={[
-                    "font-mono text-sm font-bold tabular-nums",
-                    avgTone(avgFdr),
-                  ].join(" ")}
-                  title={`Average FDR over next ${horizon} fixture${horizon === 1 ? "" : "s"}`}
-                >
-                  FDR {avgFdr.toFixed(1)}
-                </span>
+                {ranking && (
+                  <span
+                    className={[
+                      "font-mono text-sm font-bold tabular-nums",
+                      avgTone(avgFdr),
+                    ].join(" ")}
+                    title={`Average FDR over next ${horizon} fixture${horizon === 1 ? "" : "s"}`}
+                  >
+                    FDR {avgFdr.toFixed(1)}
+                  </span>
+                )}
                 <Link
                   href={`/clubs/${club.id}`}
                   className="text-sm text-emerald-400 hover:text-emerald-300"
@@ -114,9 +142,9 @@ export function ClubsClient({ clubs }: { clubs: ClubListItem[] }) {
             <div className="space-y-3">
               <div>
                 <div className="mb-1.5 text-[11px] uppercase tracking-wider text-zinc-500">
-                  Next {horizon}
+                  Next {stripLimit}
                 </div>
-                <FixtureStrip fixtures={club.upcoming} limit={horizon} />
+                <FixtureStrip fixtures={club.upcoming} limit={stripLimit} />
               </div>
               <div>
                 <div className="mb-1.5 text-[11px] uppercase tracking-wider text-zinc-500">
