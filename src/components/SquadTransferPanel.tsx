@@ -10,6 +10,71 @@ import {
 import type { ScoredPlayer } from "@/lib/types";
 import { formatPrice } from "@/lib/utils";
 
+const XPTS_PRESETS = [
+  { id: "any", label: "Any", min: 0 },
+  { id: "8", label: "8+", min: 8 },
+  { id: "12", label: "12+", min: 12 },
+  { id: "16", label: "16+", min: 16 },
+  { id: "20", label: "20+", min: 20 },
+  { id: "25", label: "25+", min: 25 },
+] as const;
+
+type XptsId = (typeof XPTS_PRESETS)[number]["id"];
+
+/** FPL prices in tenths of £m, every £0.5m from £4.0m up to bank. */
+function maxPriceSteps(maxSpend: number): number[] {
+  const cap = Math.max(40, maxSpend);
+  const steps: number[] = [];
+  for (let p = 40; p <= cap; p += 5) steps.push(p);
+  const last = steps[steps.length - 1];
+  if (last !== cap) steps.push(cap);
+  return steps;
+}
+
+function OptionChips<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ id: T; label: string; disabled?: boolean }>;
+  onChange: (id: T) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {options.map((opt) => {
+          const active = value === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              aria-pressed={active}
+              disabled={opt.disabled}
+              onClick={() => onChange(opt.id)}
+              className={[
+                "rounded-lg border px-2.5 py-1 text-sm font-medium transition",
+                opt.disabled
+                  ? "cursor-not-allowed border-zinc-800 bg-zinc-950 text-zinc-600"
+                  : active
+                    ? "border-emerald-500 bg-emerald-500 text-zinc-950"
+                    : "border-zinc-700 bg-zinc-950 text-zinc-400 hover:text-zinc-100",
+              ].join(" ")}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function SquadTransferDrawer({
   out,
   squad,
@@ -29,16 +94,35 @@ export function SquadTransferDrawer({
   const [query, setQuery] = useState("");
   const maxSpend = transferSpendLimit(squad, budget, out);
 
-  const [minPrice, setMinPrice] = useState(40); // £4.0m
-  const [maxPrice, setMaxPrice] = useState(maxSpend);
-  const [minPoints, setMinPoints] = useState(0);
+  const [priceMax, setPriceMax] = useState<number | "ALL">("ALL");
+  const [xptsPreset, setXptsPreset] = useState<XptsId>("any");
+  const [clubId, setClubId] = useState<number | "ALL">("ALL");
 
-  // Reset filters when transferring a different player
+  const clubs = useMemo(() => {
+    const map = new Map<
+      number,
+      { id: number; name: string; short: string; full: boolean }
+    >();
+    for (const p of pool) {
+      if (map.has(p.teamId)) continue;
+      const held = squad.filter(
+        (s) => s.teamId === p.teamId && s.id !== out.id,
+      ).length;
+      map.set(p.teamId, {
+        id: p.teamId,
+        name: p.teamName,
+        short: p.teamShort,
+        full: held >= 3,
+      });
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [pool, squad, out.id]);
+
   useEffect(() => {
     setQuery("");
-    setMinPrice(40);
-    setMaxPrice(maxSpend);
-    setMinPoints(0);
+    setPriceMax("ALL");
+    setXptsPreset("any");
+    setClubId("ALL");
   }, [out.id, maxSpend]);
 
   useEffect(() => {
@@ -54,19 +138,18 @@ export function SquadTransferDrawer({
     };
   }, [onClose]);
 
-  const candidates = useMemo(() => {
-    const list = listTransferIns(out, squad, pool, budget, 80, query);
-    const lo = Math.min(minPrice, maxPrice);
-    const hi = Math.max(minPrice, maxPrice);
-    return list.filter(
-      (p) =>
-        p.price >= lo &&
-        p.price <= hi &&
-        p.projectedPoints >= minPoints,
-    );
-  }, [out, squad, pool, budget, query, minPrice, maxPrice, minPoints]);
+  const priceSteps = useMemo(() => maxPriceSteps(maxSpend), [maxSpend]);
 
-  const priceCeil = Math.max(maxSpend, out.price, 50);
+  const candidates = useMemo(() => {
+    const list = listTransferIns(out, squad, pool, budget, 250, query);
+    const minPts = XPTS_PRESETS.find((p) => p.id === xptsPreset)?.min ?? 0;
+    return list.filter((p) => {
+      if (clubId !== "ALL" && p.teamId !== clubId) return false;
+      if (priceMax !== "ALL" && p.price > priceMax) return false;
+      if (p.projectedPoints < minPts) return false;
+      return true;
+    });
+  }, [out, squad, pool, budget, query, priceMax, xptsPreset, clubId]);
 
   return (
     <div className="fixed inset-0 z-[55] flex justify-end">
@@ -107,74 +190,67 @@ export function SquadTransferDrawer({
         </div>
 
         <div className="shrink-0 space-y-3 border-b border-zinc-800 px-4 py-3">
+          <div className="flex gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">Search replacements</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={`Search ${out.position}…`}
+                className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
+              />
+            </label>
+            <label className="w-40 shrink-0">
+              <span className="sr-only">Club</span>
+              <select
+                value={clubId === "ALL" ? "ALL" : String(clubId)}
+                onChange={(e) =>
+                  setClubId(
+                    e.target.value === "ALL" ? "ALL" : Number(e.target.value),
+                  )
+                }
+                className="h-full w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none"
+              >
+                <option value="ALL">All clubs</option>
+                {clubs.map((c) => (
+                  <option key={c.id} value={c.id} disabled={c.full}>
+                    {c.name}
+                    {c.full ? " (3/3)" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           <label className="block">
-            <span className="sr-only">Search replacements</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={`Search ${out.position}…`}
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none"
-            />
+            <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
+              Max price
+            </span>
+            <select
+              value={priceMax === "ALL" ? "ALL" : String(priceMax)}
+              onChange={(e) =>
+                setPriceMax(
+                  e.target.value === "ALL" ? "ALL" : Number(e.target.value),
+                )
+              }
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-2 text-sm text-zinc-100 focus:border-emerald-500 focus:outline-none"
+            >
+              <option value="ALL">Any (up to {formatPrice(maxSpend)})</option>
+              {priceSteps.map((p) => (
+                <option key={p} value={p}>
+                  {formatPrice(p)} or less
+                </option>
+              ))}
+            </select>
           </label>
 
-          <div>
-            <div className="mb-1 flex items-baseline justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                Price
-              </span>
-              <span className="text-xs text-zinc-400">
-                {formatPrice(Math.min(minPrice, maxPrice))} –{" "}
-                {formatPrice(Math.max(minPrice, maxPrice))}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="text-[10px] text-zinc-500">
-                Min
-                <input
-                  type="range"
-                  min={40}
-                  max={priceCeil}
-                  step={5}
-                  value={Math.min(minPrice, priceCeil)}
-                  onChange={(e) => setMinPrice(Number(e.target.value))}
-                  className="mt-1 w-full accent-emerald-500"
-                />
-              </label>
-              <label className="text-[10px] text-zinc-500">
-                Max
-                <input
-                  type="range"
-                  min={40}
-                  max={priceCeil}
-                  step={5}
-                  value={Math.min(maxPrice, priceCeil)}
-                  onChange={(e) => setMaxPrice(Number(e.target.value))}
-                  className="mt-1 w-full accent-emerald-500"
-                />
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <div className="mb-1 flex items-baseline justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500">
-                Min xPts
-              </span>
-              <span className="text-xs font-semibold text-emerald-400">
-                {minPoints.toFixed(1)}+
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={40}
-              step={0.5}
-              value={minPoints}
-              onChange={(e) => setMinPoints(Number(e.target.value))}
-              className="w-full accent-emerald-500"
-            />
-          </div>
+          <OptionChips
+            label="Min xPts"
+            value={xptsPreset}
+            options={XPTS_PRESETS.map((p) => ({ id: p.id, label: p.label }))}
+            onChange={setXptsPreset}
+          />
         </div>
 
         <ul className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
@@ -229,7 +305,7 @@ export function SquadTransferDrawer({
           })}
           {candidates.length === 0 && (
             <li className="px-2 py-8 text-center text-sm text-zinc-500">
-              No {out.position} matches price / points filters
+              No {out.position} matches price / club / points filters
               {query ? " or search" : ""}.
             </li>
           )}
