@@ -129,12 +129,28 @@ export async function getClubDetail(teamId: number, horizon = 5) {
       chanceOfPlaying: p.chanceOfPlaying,
     }));
 
+  const { fetchHistoricalClubH2hByOpponent } = await import(
+    "@/lib/historical-h2h"
+  );
+  let historicalByShort: Awaited<
+    ReturnType<typeof fetchHistoricalClubH2hByOpponent>
+  > = new Map();
+  try {
+    historicalByShort = await fetchHistoricalClubH2hByOpponent(
+      team.short_name,
+      upcoming.map((u) => u.opponentShort),
+    );
+  } catch {
+    historicalByShort = new Map();
+  }
+
   const vsUpcoming = buildClubVsUpcomingClubs(
     upcoming,
     fixtures,
     teamId,
     teams,
     currentSeasonLabel,
+    { historicalByShort, limit: 5 },
   );
 
   return {

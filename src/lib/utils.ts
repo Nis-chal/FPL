@@ -257,7 +257,11 @@ export function nextFixturesForTeam(
     .slice(0, limit);
 }
 
-/** Player element-summary fixtures merged with live scores from bootstrap. */
+/**
+ * Player upcoming fixtures — same unfinished window as club detail
+ * (`!finished`, so live / provisional “current” GWs stay visible).
+ * Element-summary often drops the current GW once it starts; bootstrap does not.
+ */
 export function playerUpcomingFixtures(
   elementFixtures: Array<{
     id: number;
@@ -274,36 +278,52 @@ export function playerUpcomingFixtures(
   teams: Map<number, FplTeam>,
   limit = 7,
 ): FixtureView[] {
+  const fromTeam = nextFixturesForTeam(allFixtures, teamId, teams, limit);
+  const seen = new Set(fromTeam.map((f) => f.id));
   const viewsById = new Map(
     toFixtureViews(allFixtures, teamId, teams).map((v) => [v.id, v]),
   );
 
-  return elementFixtures.slice(0, limit).map((ef) => {
+  const extras: FixtureView[] = [];
+  for (const ef of elementFixtures) {
+    if (seen.has(ef.id)) continue;
     const full = viewsById.get(ef.id);
-    if (full) return full;
+    if (full?.finished || (!full && ef.finished)) continue;
 
-    const isHome = ef.is_home;
-    const opponentId = isHome ? ef.team_a : ef.team_h;
-    const opponent = teams.get(opponentId);
-    return {
-      id: ef.id,
-      event: ef.event,
-      kickoff_time: ef.kickoff_time,
-      isHome,
-      opponentId,
-      opponentName: opponent?.name ?? "Unknown",
-      opponentShort: opponent?.short_name ?? "???",
-      difficulty: ef.difficulty,
-      finished: ef.finished,
-      hasResult: ef.finished,
-      isLive: false,
-      isCurrent: false,
-      minutes: 0,
-      teamScore: null,
-      opponentScore: null,
-      result: null,
-    } satisfies FixtureView;
-  });
+    const mapped =
+      full ??
+      ({
+        id: ef.id,
+        event: ef.event,
+        kickoff_time: ef.kickoff_time,
+        isHome: ef.is_home,
+        opponentId: ef.is_home ? ef.team_a : ef.team_h,
+        opponentName: teams.get(ef.is_home ? ef.team_a : ef.team_h)?.name ?? "Unknown",
+        opponentShort:
+          teams.get(ef.is_home ? ef.team_a : ef.team_h)?.short_name ?? "???",
+        difficulty: ef.difficulty,
+        finished: ef.finished,
+        hasResult: ef.finished,
+        isLive: false,
+        isCurrent: false,
+        minutes: 0,
+        teamScore: null,
+        opponentScore: null,
+        result: null,
+      } satisfies FixtureView);
+
+    seen.add(mapped.id);
+    extras.push(mapped);
+    if (fromTeam.length + extras.length >= limit) break;
+  }
+
+  return [...fromTeam, ...extras]
+    .sort((a, b) => {
+      const at = a.kickoff_time ? new Date(a.kickoff_time).getTime() : 0;
+      const bt = b.kickoff_time ? new Date(b.kickoff_time).getTime() : 0;
+      return at - bt;
+    })
+    .slice(0, limit);
 }
 
 export function recentFixturesForTeam(

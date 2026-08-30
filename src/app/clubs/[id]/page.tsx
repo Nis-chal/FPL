@@ -117,7 +117,7 @@ export default async function ClubDetailPage({
           </Card>
         </div>
 
-        <VsUpcomingSection clubs={detail.vsUpcoming} />
+        <VsUpcomingSection clubs={detail.vsUpcoming} variant="club" />
 
         <Card
           title="Squad by projected points"

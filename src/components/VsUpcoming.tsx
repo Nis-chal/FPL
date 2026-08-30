@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Card } from "@/components/ui";
 import type { VsOpponentMeeting, VsUpcomingClub } from "@/lib/opponent-history";
 
+type VsVariant = "player" | "club";
+
 function formatMatchDate(iso: string | null): string {
   if (!iso) return "Date TBA";
   const d = new Date(iso);
@@ -142,12 +144,56 @@ function projectFromMeetings(meetings: VsOpponentMeeting[]): H2hProjection | nul
   return { appearances, scoreProb, assistProb, likelyScorelines };
 }
 
+function ScorelineChips({
+  lines,
+}: {
+  lines: H2hProjection["likelyScorelines"];
+}) {
+  return (
+    <>
+      {lines.map((s, i) => (
+        <span
+          key={`${s.line}-${i}`}
+          title={s.note ? `${s.note} · ${Math.round(s.pct)}%` : `${Math.round(s.pct)}%`}
+          className={[
+            "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-mono font-bold",
+            i === 0
+              ? "bg-zinc-100/10 text-zinc-100"
+              : "text-zinc-400",
+          ].join(" ")}
+        >
+          {s.line}
+          <span className="font-sans text-[9px] font-medium text-zinc-500">
+            {Math.round(s.pct)}%
+          </span>
+        </span>
+      ))}
+    </>
+  );
+}
+
 /** Compact chips right after the club name. */
-function OutlookInline({ meetings }: { meetings: VsOpponentMeeting[] }) {
+function OutlookInline({
+  meetings,
+  variant,
+}: {
+  meetings: VsOpponentMeeting[];
+  variant: VsVariant;
+}) {
   const proj = projectFromMeetings(meetings);
   if (!proj || proj.appearances === 0) {
     return (
-      <span className="text-xs text-zinc-500">No H2H appearances</span>
+      <span className="text-xs text-zinc-500">
+        {variant === "club" ? "No previous meetings" : "No H2H appearances"}
+      </span>
+    );
+  }
+
+  if (variant === "club") {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <ScorelineChips lines={proj.likelyScorelines} />
+      </div>
     );
   }
 
@@ -166,28 +212,18 @@ function OutlookInline({ meetings }: { meetings: VsOpponentMeeting[] }) {
         👟 {pct(proj.assistProb)}
       </span>
       <span className="text-zinc-600">·</span>
-      {proj.likelyScorelines.map((s, i) => (
-        <span
-          key={`${s.line}-${i}`}
-          title={s.note ? `${s.note} · ${Math.round(s.pct)}%` : `${Math.round(s.pct)}%`}
-          className={[
-            "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-mono font-bold",
-            i === 0
-              ? "bg-zinc-100/10 text-zinc-100"
-              : "text-zinc-400",
-          ].join(" ")}
-        >
-          {s.line}
-          <span className="font-sans text-[9px] font-medium text-zinc-500">
-            {Math.round(s.pct)}%
-          </span>
-        </span>
-      ))}
+      <ScorelineChips lines={proj.likelyScorelines} />
     </div>
   );
 }
 
-function MatchDetailBlock({ m }: { m: VsOpponentMeeting }) {
+function MatchDetailBlock({
+  m,
+  variant,
+}: {
+  m: VsOpponentMeeting;
+  variant: VsVariant;
+}) {
   const shotProxy = Math.round(m.threat);
   return (
     <div className="rounded-lg border border-zinc-800 bg-zinc-950/50 px-3 py-2">
@@ -198,47 +234,61 @@ function MatchDetailBlock({ m }: { m: VsOpponentMeeting }) {
             resultTabClass(m),
           ].join(" ")}
         >
-          {m.minutes <= 0 ? "DNP" : (m.result ?? "–")} {scoreLabel(m)}
+          {variant === "player" && m.minutes <= 0 ? "DNP" : (m.result ?? "–")}{" "}
+          {scoreLabel(m)}
         </span>
         <span className="text-zinc-300">{formatMatchDate(m.kickoffTime)}</span>
         <span className="text-xs text-zinc-500">
-          {m.seasonLabel} · {m.wasHome ? "H" : "A"} · GW{m.round} ·{" "}
-          {m.minutes <= 0 ? (
-            <span className="font-semibold text-amber-300">Did not play</span>
-          ) : (
+          {m.seasonLabel} · {m.wasHome ? "H" : "A"} · GW{m.round}
+          {variant === "player" && (
             <>
-              {m.minutes}&apos; ·{" "}
-              <span className="font-semibold text-emerald-400">
-                {m.points} pts
-              </span>
+              {" · "}
+              {m.minutes <= 0 ? (
+                <span className="font-semibold text-amber-300">Did not play</span>
+              ) : (
+                <>
+                  {m.minutes}&apos; ·{" "}
+                  <span className="font-semibold text-emerald-400">
+                    {m.points} pts
+                  </span>
+                </>
+              )}
             </>
           )}
         </span>
       </div>
 
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
-          ⚽ {m.goals}
-        </span>
-        <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
-          👟 {m.assists}
-        </span>
-        <span
-          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-200"
-          title="FPL Threat ≈ shot volume"
-        >
-          🎯 {shotProxy}
-        </span>
-        <span className="text-[11px] text-zinc-500">
-          Creat {Math.round(m.creativity)} · Def {m.defensiveContribution} · CBI{" "}
-          {m.clearancesBlocksInterceptions} · Tkl {m.tackles}
-        </span>
-      </div>
+      {variant === "player" && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+            ⚽ {m.goals}
+          </span>
+          <span className="rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-0.5 text-[11px] font-semibold text-sky-300">
+            👟 {m.assists}
+          </span>
+          <span
+            className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-200"
+            title="FPL Threat ≈ shot volume"
+          >
+            🎯 {shotProxy}
+          </span>
+          <span className="text-[11px] text-zinc-500">
+            Creat {Math.round(m.creativity)} · Def {m.defensiveContribution} · CBI{" "}
+            {m.clearancesBlocksInterceptions} · Tkl {m.tackles}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-function OpponentBlock({ club }: { club: VsUpcomingClub }) {
+function OpponentBlock({
+  club,
+  variant,
+}: {
+  club: VsUpcomingClub;
+  variant: VsVariant;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -274,7 +324,7 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
           )}
         </h3>
         {club.meetings.length > 0 && (
-          <OutlookInline meetings={club.meetings} />
+          <OutlookInline meetings={club.meetings} variant={variant} />
         )}
         {club.meetings.length > 0 && (
           <button
@@ -306,18 +356,20 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
                   resultTabClass(m),
                 ].join(" ")}
                 title={
-                  m.minutes <= 0
+                  variant === "player" && m.minutes <= 0
                     ? "Did not play"
                     : `${formatMatchDate(m.kickoffTime)} · ${m.seasonLabel}`
                 }
               >
                 <span className="text-[9px] font-bold uppercase opacity-80">
-                  {m.minutes <= 0 ? "DNP" : (m.result ?? "–")}
+                  {variant === "player" && m.minutes <= 0
+                    ? "DNP"
+                    : (m.result ?? "–")}
                 </span>
                 <span className="font-mono text-xs font-bold tabular-nums">
                   {scoreLabel(m)}
                 </span>
-                {m.minutes > 0 && (
+                {variant === "player" && m.minutes > 0 && (
                   <IconBadges goals={m.goals} assists={m.assists} />
                 )}
               </span>
@@ -330,6 +382,7 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
                 <MatchDetailBlock
                   key={`${m.seasonLabel}-${m.round}-${m.kickoffTime}`}
                   m={m}
+                  variant={variant}
                 />
               ))}
             </div>
@@ -342,19 +395,30 @@ function OpponentBlock({ club }: { club: VsUpcomingClub }) {
   );
 }
 
-export function VsUpcomingSection({ clubs }: { clubs: VsUpcomingClub[] }) {
+export function VsUpcomingSection({
+  clubs,
+  variant = "player",
+}: {
+  clubs: VsUpcomingClub[];
+  variant?: VsVariant;
+}) {
   if (clubs.length === 0) return null;
 
   return (
     <Card
       title="Vs upcoming clubs"
-      subtitle="⚽ score % · 👟 assist % · likely scorelines · green win · yellow DNP"
+      subtitle={
+        variant === "club"
+          ? "Last 5 meetings (this season + archives) · likely scorelines · green win"
+          : "⚽ score % · 👟 assist % · likely scorelines · green win · yellow DNP"
+      }
     >
       <div className="space-y-2">
         {clubs.map((club) => (
           <OpponentBlock
             key={`${club.opponentId}-${club.nextEvent}`}
             club={club}
+            variant={variant}
           />
         ))}
       </div>

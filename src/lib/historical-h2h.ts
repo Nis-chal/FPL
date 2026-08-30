@@ -107,6 +107,109 @@ async function getSeasonTeamIdsByShort(
   });
 }
 
+type SeasonFixture = {
+  event: number;
+  finished: boolean;
+  kickoffTime: string | null;
+  minutes: number;
+  teamA: number;
+  teamH: number;
+  teamAScore: number | null;
+  teamHScore: number | null;
+};
+
+async function getSeasonFixtures(season: string): Promise<SeasonFixture[]> {
+  return withCache(`hist-fixtures-${season}`, ARCHIVE_TTL, async () => {
+    const text = await fetchText(`${RAW_BASE}/${season}/fixtures.csv`);
+    if (!text) return [];
+    const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean);
+    if (lines.length < 2) return [];
+    const headers = splitCsvLine(lines[0]);
+    const col = (name: string) => headers.indexOf(name);
+    const iEvent = col("event");
+    const iFinished = col("finished");
+    const iKickoff = col("kickoff_time");
+    const iMinutes = col("minutes");
+    const iTeamA = col("team_a");
+    const iTeamH = col("team_h");
+    const iTeamAScore = col("team_a_score");
+    const iTeamHScore = col("team_h_score");
+    if (
+      iEvent < 0 ||
+      iTeamA < 0 ||
+      iTeamH < 0 ||
+      iTeamAScore < 0 ||
+      iTeamHScore < 0
+    ) {
+      return [];
+    }
+
+    const out: SeasonFixture[] = [];
+    for (const line of lines.slice(1)) {
+      // Skip the quoted `stats` blob — it is huge and full of commas.
+      const cut = line.indexOf(',"[');
+      const prefix = cut >= 0 ? line.slice(0, cut) : line;
+      const cols = splitCsvLine(prefix);
+      out.push({
+        event: num(cols[iEvent]),
+        finished: String(cols[iFinished] ?? "").toLowerCase() === "true",
+        kickoffTime: cols[iKickoff] || null,
+        minutes: num(cols[iMinutes]),
+        teamA: num(cols[iTeamA]),
+        teamH: num(cols[iTeamH]),
+        teamAScore: numOrNull(cols[iTeamAScore]),
+        teamHScore: numOrNull(cols[iTeamHScore]),
+      });
+    }
+    return out;
+  });
+}
+
+const EMPTY_CLUB_INVOLVEMENT = {
+  threat: 0,
+  creativity: 0,
+  defensiveContribution: 0,
+  clearancesBlocksInterceptions: 0,
+  tackles: 0,
+  recoveries: 0,
+} as const;
+
+function fixtureToClubMeeting(
+  f: SeasonFixture,
+  season: string,
+  teamId: number,
+): VsOpponentMeeting | null {
+  const wasHome = f.teamH === teamId;
+  if (!wasHome && f.teamA !== teamId) return null;
+  if (!f.finished && f.teamHScore === null && f.teamAScore === null) {
+    return null;
+  }
+
+  const teamScore = wasHome ? f.teamHScore : f.teamAScore;
+  const opponentScore = wasHome ? f.teamAScore : f.teamHScore;
+  let result: VsOpponentMeeting["result"] = null;
+  if (teamScore !== null && opponentScore !== null) {
+    if (teamScore > opponentScore) result = "W";
+    else if (teamScore < opponentScore) result = "L";
+    else result = "D";
+  }
+
+  return {
+    round: f.event,
+    points: 0,
+    goals: 0,
+    assists: 0,
+    minutes: f.minutes > 0 ? f.minutes : f.finished ? 90 : 0,
+    wasHome,
+    kickoffTime: f.kickoffTime,
+    teamScore,
+    opponentScore,
+    result,
+    seasonLabel: seasonLabel(season),
+    ...EMPTY_CLUB_INVOLVEMENT,
+  };
+}
+
 async function getSeasonPlayerByCode(
   season: string,
   playerCode: number,
@@ -229,6 +332,60 @@ export async function fetchHistoricalH2hByOpponent(
         const short = opponentIds.get(oppId);
         if (!short) continue;
         const meeting = rowToMeeting(row, season);
+        if (!meeting) continue;
+        result.get(short)!.push(meeting);
+      }
+    }),
+  );
+
+  for (const [short, meetings] of result) {
+    meetings.sort((a, b) => {
+      const at = a.kickoffTime ? new Date(a.kickoffTime).getTime() : 0;
+      const bt = b.kickoffTime ? new Date(b.kickoffTime).getTime() : 0;
+      return bt - at;
+    });
+    result.set(short, meetings);
+  }
+
+  return result;
+}
+
+/**
+ * Club-vs-club meetings from archived seasons, keyed by opponent short (e.g. "ARS").
+ * Team IDs change yearly, so matching is by FPL short_name.
+ */
+export async function fetchHistoricalClubH2hByOpponent(
+  teamShort: string,
+  opponentShorts: string[],
+): Promise<Map<string, VsOpponentMeeting[]>> {
+  const unique = [...new Set(opponentShorts.filter(Boolean))];
+  const result = new Map<string, VsOpponentMeeting[]>();
+  for (const s of unique) result.set(s, []);
+  if (!teamShort || unique.length === 0) return result;
+
+  await Promise.all(
+    ARCHIVE_SEASONS.map(async (season) => {
+      const [teams, fixtures] = await Promise.all([
+        getSeasonTeamIdsByShort(season),
+        getSeasonFixtures(season),
+      ]);
+      const teamId = teams.get(teamShort);
+      if (!teamId || fixtures.length === 0) return;
+
+      const opponentIds = new Map<number, string>();
+      for (const short of unique) {
+        const id = teams.get(short);
+        if (id) opponentIds.set(id, short);
+      }
+      if (opponentIds.size === 0) return;
+
+      for (const f of fixtures) {
+        const oppId =
+          f.teamH === teamId ? f.teamA : f.teamA === teamId ? f.teamH : 0;
+        if (!oppId) continue;
+        const short = opponentIds.get(oppId);
+        if (!short) continue;
+        const meeting = fixtureToClubMeeting(f, season, teamId);
         if (!meeting) continue;
         result.get(short)!.push(meeting);
       }

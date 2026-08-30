@@ -87,6 +87,36 @@ function meetingKey(m: Pick<VsOpponentMeeting, "kickoffTime" | "round" | "season
   return `${m.seasonLabel}|${m.kickoffTime ?? ""}|${m.round}`;
 }
 
+function mergeMeetings(
+  thisSeason: VsOpponentMeeting[],
+  archived: VsOpponentMeeting[],
+  limit: number,
+): VsOpponentMeeting[] {
+  const seen = new Set<string>();
+  const merged: VsOpponentMeeting[] = [];
+  for (const m of [...thisSeason, ...archived]) {
+    const key = meetingKey(m);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(m);
+  }
+  merged.sort((a, b) => {
+    const at = a.kickoffTime ? new Date(a.kickoffTime).getTime() : 0;
+    const bt = b.kickoffTime ? new Date(b.kickoffTime).getTime() : 0;
+    return bt - at;
+  });
+  return merged.slice(0, limit);
+}
+
+const EMPTY_INVOLVEMENT: InvolvementStats = {
+  threat: 0,
+  creativity: 0,
+  defensiveContribution: 0,
+  clearancesBlocksInterceptions: 0,
+  tackles: 0,
+  recoveries: 0,
+};
+
 /**
  * For each upcoming opponent, last N H2H meetings (this season + archives).
  */
@@ -152,22 +182,7 @@ export function buildVsUpcomingClubs(
       });
 
     const archived = historicalByShort?.get(u.opponentShort) ?? [];
-    const seen = new Set<string>();
-    const merged: VsOpponentMeeting[] = [];
-    for (const m of [...thisSeason, ...archived]) {
-      const key = meetingKey(m);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(m);
-    }
-
-    merged.sort((a, b) => {
-      const at = a.kickoffTime ? new Date(a.kickoffTime).getTime() : 0;
-      const bt = b.kickoffTime ? new Date(b.kickoffTime).getTime() : 0;
-      return bt - at;
-    });
-
-    const meetings = merged.slice(0, limit);
+    const meetings = mergeMeetings(thisSeason, archived, limit);
     const totalPoints = meetings.reduce((s, m) => s + m.points, 0);
     const totalGoals = meetings.reduce((s, m) => s + m.goals, 0);
     const totalAssists = meetings.reduce((s, m) => s + m.assists, 0);
@@ -195,44 +210,44 @@ export function buildVsUpcomingClubs(
   });
 }
 
-/** Club page: H2H scorelines vs each upcoming opponent (from FPL fixtures). */
+/** Club page: H2H scorelines vs each upcoming opponent (this season + archives). */
 export function buildClubVsUpcomingClubs(
   upcoming: FixtureView[],
   fixtures: FplFixture[],
   teamId: number,
   teams: Map<number, FplTeam>,
   currentSeasonLabel: string,
-  limit = 5,
+  options?: {
+    historicalByShort?: Map<string, VsOpponentMeeting[]>;
+    limit?: number;
+  },
 ): VsUpcomingClub[] {
+  const limit = options?.limit ?? 5;
+  const historicalByShort = options?.historicalByShort;
+
   return upcoming.map((u) => {
-    const meetings: VsOpponentMeeting[] = headToHeadFixtures(
+    const thisSeason: VsOpponentMeeting[] = headToHeadFixtures(
       fixtures,
       teamId,
       u.opponentId,
       teams,
-    )
-      .slice(0, limit)
-      .map((f) => ({
-        round: f.event ?? 0,
-        points: 0,
-        goals: 0,
-        assists: 0,
-        minutes: f.isLive ? f.minutes : f.hasResult ? 90 : 0,
-        wasHome: f.isHome,
-        kickoffTime: f.kickoff_time,
-        teamScore: f.teamScore,
-        opponentScore: f.opponentScore,
-        result: f.result,
-        seasonLabel: currentSeasonLabel,
-        ...involvementFromHistory({
-          threat: "0",
-          creativity: "0",
-          defensive_contribution: 0,
-          clearances_blocks_interceptions: 0,
-          tackles: 0,
-          recoveries: 0,
-        }),
-      }));
+    ).map((f) => ({
+      round: f.event ?? 0,
+      points: 0,
+      goals: 0,
+      assists: 0,
+      minutes: f.isLive ? f.minutes : f.hasResult ? 90 : 0,
+      wasHome: f.isHome,
+      kickoffTime: f.kickoff_time,
+      teamScore: f.teamScore,
+      opponentScore: f.opponentScore,
+      result: f.result,
+      seasonLabel: currentSeasonLabel,
+      ...EMPTY_INVOLVEMENT,
+    }));
+
+    const archived = historicalByShort?.get(u.opponentShort) ?? [];
+    const meetings = mergeMeetings(thisSeason, archived, limit);
 
     return {
       opponentId: u.opponentId,
