@@ -3,10 +3,9 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { PitchView } from "@/components/PitchView";
-import { buildRecommendedSquad } from "@/lib/squad";
-import { pickCaptain, pickViceCaptain } from "@/lib/ranking";
+import { buildAiSquad } from "@/lib/ai-squad-build";
 import type { ScoredPlayer } from "@/lib/types";
-import { BUDGET, formatPrice } from "@/lib/utils";
+import { formatPrice } from "@/lib/utils";
 
 export function AiSquadHomeCard({
   players,
@@ -17,16 +16,10 @@ export function AiSquadHomeCard({
   horizon?: number;
   currentGameweek?: number;
 }) {
-  const built = useMemo(() => {
-    const squad = buildRecommendedSquad(players, BUDGET, horizon, ["overall"]);
-    if (!squad.captain || squad.startingXi.length === 0) return squad;
-    const captain =
-      pickCaptain(squad.startingXi, ["overall"]) ?? squad.captain;
-    const vice =
-      pickViceCaptain(squad.startingXi, captain, ["overall"]) ??
-      squad.viceCaptain;
-    return { ...squad, captain, viceCaptain: vice };
-  }, [players, horizon]);
+  const built = useMemo(
+    () => buildAiSquad(players, { horizon }),
+    [players, horizon],
+  );
 
   if (built.startingXi.length === 0) return null;
 

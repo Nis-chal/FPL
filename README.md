@@ -62,13 +62,13 @@ Atlas setup:
 | **Points** | `/points` | Your FPL team (team ID) · this GW points · transfer tips |
 | **AI** | `/ai` | Locked AI £100m squad (transfers/swaps OK; reset only via script) |
 
-Reset AI Squad:
+Reset AI Squad (rebuilds from team-rating optimiser):
 
 ```bash
 bun run ai:reset
 ```
 
-Then refresh `/ai` — the model rebuilds and saves to MongoDB. There is no Reset button in the UI.
+Clears the old squad and saves a fresh £100m XI to MongoDB. Then refresh `/ai`. Use `--clear-only` to wipe without rebuilding.
 | **Squad** | `/squad` | Edit best £100m XI · Filters + team ID search |
 | **Recommend** | `/recommend` | Best XI at top · chip timing, captain, transfers below |
 

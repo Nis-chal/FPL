@@ -11,10 +11,10 @@ import { Card, TipTrigger } from "@/components/ui";
 import { useAccumulatedPoints } from "@/hooks/useAccumulatedPoints";
 import { useAnalysisPrefs } from "@/hooks/useAnalysisPrefs";
 import type { AiSquadSnapshot } from "@/lib/db/ai-squad";
+import { buildAiSquad } from "@/lib/ai-squad-build";
 import { formationFromXi, trySwap, xiProjectedTotal } from "@/lib/pitch";
 import { filterByPrice, pickCaptain, pickViceCaptain, sortByRank } from "@/lib/ranking";
 import { applyHorizon } from "@/lib/scoring";
-import { buildRecommendedSquad } from "@/lib/squad";
 import { rateTeam } from "@/lib/team-rating";
 import { applySquadTransfer, suggestTransfers } from "@/lib/transfers";
 import type { GwPointsFilter } from "@/lib/season-accumulated";
@@ -203,28 +203,10 @@ export function AiSquadClient({
     );
   }, [allPlayers, horizon, includeAccumulated, priceBounds, rankBy, seasonBasis, chip]);
 
-  const built = useMemo(() => {
-    const squad = buildRecommendedSquad(
-      scored,
-      BUDGET,
-      horizon,
-      rankBy,
-      chip,
-      formation,
-    );
-    if (!squad.captain || squad.startingXi.length === 0) return squad;
-    const captain =
-      pickCaptain(squad.startingXi, rankBy, seasonBasis, chip) ?? squad.captain;
-    const vice =
-      pickViceCaptain(
-        squad.startingXi,
-        captain,
-        rankBy,
-        seasonBasis,
-        chip === "triple_captain" ? "none" : chip,
-      ) ?? squad.viceCaptain;
-    return { ...squad, captain, viceCaptain: vice };
-  }, [scored, rankBy, horizon, seasonBasis, chip, formation]);
+  const aiBuilt = useMemo(
+    () => buildAiSquad(allPlayers, { horizon, includeAccumulated }),
+    [allPlayers, horizon, includeAccumulated],
+  );
 
   /** Load once from MongoDB; only rebuild if no saved squad (after `bun run ai:reset`). */
   useEffect(() => {
@@ -248,16 +230,18 @@ export function AiSquadClient({
           setLineup(fromDb);
           setHint(null);
         } else {
-          const fresh = lineupFromBuilt(built);
+          const fresh = lineupFromBuilt(aiBuilt);
           if (fresh) {
             setLineup(fresh);
             await persistLineup(fresh);
-            setHint("AI Squad saved · reset only via bun run ai:reset");
+            setHint(
+              "AI Squad saved (team-rating optimiser) · reset via bun run ai:reset",
+            );
           }
         }
       } catch {
         if (cancelled) return;
-        const fresh = lineupFromBuilt(built);
+        const fresh = lineupFromBuilt(aiBuilt);
         if (fresh) setLineup(fresh);
       } finally {
         if (!cancelled) setLoaded(true);
@@ -291,10 +275,10 @@ export function AiSquadClient({
   }, []);
 
   const active = lineup ?? {
-    startingXi: built.startingXi,
-    bench: built.bench,
-    captainId: built.captain?.id ?? 0,
-    viceId: built.viceCaptain?.id ?? 0,
+    startingXi: aiBuilt.startingXi,
+    bench: aiBuilt.bench,
+    captainId: aiBuilt.captain?.id ?? 0,
+    viceId: aiBuilt.viceCaptain?.id ?? 0,
   };
 
   const squad = useMemo(

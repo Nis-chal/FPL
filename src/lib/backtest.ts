@@ -24,6 +24,7 @@ import type {
 import {
   availabilityFactor,
   parseFloatSafe,
+  getFinishedGameweeks,
   POSITION_MAP,
   teamMap,
   toFixtureViews,
@@ -307,10 +308,10 @@ export async function runBacktest(
   ]);
   const teams = teamMap(bootstrap.teams);
 
-  const finishedRounds = bootstrap.events
-    .filter((e) => e.finished)
-    .map((e) => e.id)
-    .sort((a, b) => a - b);
+  const finishedRounds = getFinishedGameweeks(
+    bootstrap.events,
+    fixtures,
+  );
 
   const pool = bootstrap.elements
     .filter((el) => el.minutes > 0)

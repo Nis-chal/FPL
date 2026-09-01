@@ -1,8 +1,8 @@
-import { getBootstrap, getElementSummary } from "@/lib/fpl-client";
+import { getBootstrap, getElementSummary, getFixtures } from "@/lib/fpl-client";
 import { upsertPlayerHistory } from "@/lib/db/player-history";
 import { setSyncMeta } from "@/lib/db/sync-meta";
 import { isMongoConfigured } from "@/lib/db/client";
-import { POSITION_MAP } from "@/lib/utils";
+import { getFinishedGameweeks, POSITION_MAP } from "@/lib/utils";
 import type { Position } from "@/lib/types";
 
 function sleep(ms: number) {
@@ -28,11 +28,11 @@ export async function syncFplToMongo(
   const fetchDelayMs = options.fetchDelayMs ?? 120;
   const log = options.onProgress ?? (() => undefined);
 
-  const bootstrap = await getBootstrap();
-  const finishedRounds = bootstrap.events
-    .filter((e) => e.finished)
-    .map((e) => e.id)
-    .sort((a, b) => a - b);
+  const [bootstrap, fixtures] = await Promise.all([
+    getBootstrap(),
+    getFixtures(),
+  ]);
+  const finishedRounds = getFinishedGameweeks(bootstrap.events, fixtures);
 
   const pool = bootstrap.elements
     .filter((el) => el.minutes > 0)

@@ -15,6 +15,7 @@ import { sortSeasonsLatestFirst } from "@/lib/season-sort";
 import type { PastSeasonStats, ScoredPlayer } from "@/lib/types";
 import {
   getCurrentEvent,
+  getFinishedGameweeks,
   getNextEvent,
   getPointsEvent,
   nextFixturesForTeam,
@@ -45,6 +46,7 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
   );
   const seasonPoints = await enrichScoredWithSeasonPoints(scored);
   scored = seasonPoints.players;
+  const finishedGameweeks = getFinishedGameweeks(bootstrap.events, fixtures);
   const bestSquad = buildBestSquad(scored);
   const topScorers = topProjected(scored, 12, {
     minMinutes: 1,
@@ -66,12 +68,9 @@ export async function getLeagueInsights(horizon = 5, includeAccumulated = true) 
     currentEvent,
     nextEvent,
     pointsEvent,
-    finishedGameweeks: bootstrap.events
-      .filter((e) => e.finished)
-      .map((e) => e.id)
-      .sort((a, b) => a - b),
+    finishedGameweeks,
     upcomingGameweeks: bootstrap.events
-      .filter((e) => !e.finished)
+      .filter((e) => !finishedGameweeks.includes(e.id))
       .map((e) => e.id)
       .sort((a, b) => a - b),
     topScorers,

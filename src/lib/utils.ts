@@ -114,6 +114,27 @@ export function getPointsEvent(events: FplEvent[]): FplEvent | undefined {
   return getCurrentEvent(events);
 }
 
+/** All fixtures for a GW have a result (FPL `event.finished` can lag hours behind). */
+export function eventFixturesComplete(
+  eventId: number,
+  fixtures: FplFixture[],
+): boolean {
+  const eventFixtures = fixtures.filter((f) => f.event === eventId);
+  if (eventFixtures.length === 0) return false;
+  return eventFixtures.every((f) => fixtureHasResult(f));
+}
+
+/** Gameweeks safe to backtest / show per-GW history for. */
+export function getFinishedGameweeks(
+  events: FplEvent[],
+  fixtures: FplFixture[],
+): number[] {
+  return events
+    .filter((e) => e.finished || eventFixturesComplete(e.id, fixtures))
+    .map((e) => e.id)
+    .sort((a, b) => a - b);
+}
+
 /** Gameweek after the active one (for “next” fixtures / deadlines). */
 export function getNextEvent(events: FplEvent[]): FplEvent | undefined {
   const current = getCurrentEvent(events);
